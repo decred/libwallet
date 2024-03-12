@@ -32,6 +32,9 @@ func (w *Wallet) StartSync(ctx context.Context, ntfns *spv.Notifications, connec
 	}
 	syncer.SetNotifications(ntfns)
 
+	// TODO: Set a birthday to sync from. I don't think dcrwallet allows
+	// this currently.
+
 	w.syncer = syncer
 	w.SetNetworkBackend(syncer)
 

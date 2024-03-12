@@ -6,17 +6,22 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 const walletDataFileName = "walletdata.json"
 
 type walletData struct {
 	EncryptedSeedHex string `json:"encryptedseedhex,omitempty"`
+	Birthday         int64  `json:"birthday,omitempty"`
 }
 
-func saveWalletData(encSeed []byte, dataDir string) error {
+func saveWalletData(encSeed []byte, birthday time.Time, dataDir string) error {
 	encSeedHex := hex.EncodeToString(encSeed)
-	wd := walletData{EncryptedSeedHex: encSeedHex}
+	wd := walletData{
+		EncryptedSeedHex: encSeedHex,
+		Birthday:         birthday.Unix(),
+	}
 	file, err := json.MarshalIndent(wd, "", " ")
 	if err != nil {
 		fmt.Errorf("unable to marshal wallet data: %v", err)

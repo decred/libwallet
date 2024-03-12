@@ -15,6 +15,7 @@ import (
 
 const (
 	walletDbName = "wallet.db"
+	entropyBytes = 18 // 144 bits
 )
 
 // WalletExistsAt returns whether a wallet database file exists at the specified
@@ -45,18 +46,20 @@ func CreateWallet(ctx context.Context, params asset.CreateWalletParams, recovery
 	}
 
 	var seed []byte
+	var birthday time.Time
 	var walletTraits asset.WalletTrait
 	if recovery != nil {
-		seed = recovery.Seed
+		seed, birthday = recovery.Seed, recovery.Birthday
 		walletTraits = asset.WalletTraitRestored
 	} else {
-		seed, err = hdkeychain.GenerateSeed(hdkeychain.RecommendedSeedLen)
+		seed, err = hdkeychain.GenerateSeed(entropyBytes)
 		if err != nil {
 			return nil, fmt.Errorf("unable to generate random seed: %v", err)
 		}
+		birthday = time.Now()
 	}
 
-	wb, err := asset.NewWalletBase(params.OpenWalletParams, seed, params.Pass, walletTraits)
+	wb, err := asset.NewWalletBase(params.OpenWalletParams, seed, params.Pass, birthday, walletTraits)
 	if err != nil {
 		return nil, fmt.Errorf("NewWalletBase error: %v", err)
 	}
@@ -141,7 +144,7 @@ func CreateWatchOnlyWallet(ctx context.Context, extendedPubKey string, params as
 		return nil, fmt.Errorf("check new wallet data directory error: %w", err)
 	}
 
-	wb, err := asset.NewWalletBase(params.OpenWalletParams, nil, nil, asset.WalletTraitWatchOnly)
+	wb, err := asset.NewWalletBase(params.OpenWalletParams, nil, nil, time.Time{}, asset.WalletTraitWatchOnly)
 	if err != nil {
 		return nil, fmt.Errorf("NewWalletBase error: %v", err)
 	}

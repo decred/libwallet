@@ -5,10 +5,13 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sync"
+	"time"
 
-	"decred.org/dcrwallet/v3/walletseed"
+	"decred.org/dcrdex/client/mnemonic"
 	"github.com/decred/slog"
 )
+
+const entropyBytes = 18 // 144 bits
 
 type WalletBase struct {
 	log     slog.Logger
@@ -18,6 +21,7 @@ type WalletBase struct {
 	mtx                      sync.Mutex
 	traits                   WalletTrait
 	encryptedSeed            []byte
+	birthday                 time.Time
 	accountDiscoveryRequired bool
 
 	*syncHelper
@@ -25,7 +29,7 @@ type WalletBase struct {
 
 // NewWalletBase initializes a WalletBase using the information provided. The
 // wallet's seed is encrypted and saved, along with other basic wallet info.
-func NewWalletBase(params OpenWalletParams, seed, walletPass []byte, traits WalletTrait) (*WalletBase, error) {
+func NewWalletBase(params OpenWalletParams, seed, walletPass []byte, birthday time.Time, traits WalletTrait) (*WalletBase, error) {
 	isWatchOnly, isRestored := isWatchOnly(traits), isRestored(traits)
 	if isWatchOnly && isRestored {
 		return nil, fmt.Errorf("invalid wallet traits: restored wallet cannot be watch only")
@@ -40,6 +44,10 @@ func NewWalletBase(params OpenWalletParams, seed, walletPass []byte, traits Wall
 		return nil, fmt.Errorf("seed AND private passphrase are required")
 	}
 
+	if hasSeedAndWalletPass && len(seed) != entropyBytes {
+		return nil, fmt.Errorf("seed should be %d bytes long but go %d", entropyBytes, len(seed))
+	}
+
 	var encryptedSeed []byte
 	var err error
 	if !isWatchOnly {
@@ -52,7 +60,7 @@ func NewWalletBase(params OpenWalletParams, seed, walletPass []byte, traits Wall
 	// Account discovery is only required for restored wallets.
 	accountDiscoveryRequired := isRestored
 
-	if err := saveWalletData(encryptedSeed, params.DataDir); err != nil {
+	if err := saveWalletData(encryptedSeed, birthday, params.DataDir); err != nil {
 		return nil, err
 	}
 
@@ -62,6 +70,7 @@ func NewWalletBase(params OpenWalletParams, seed, walletPass []byte, traits Wall
 		network:                  params.Net,
 		traits:                   traits,
 		encryptedSeed:            encryptedSeed,
+		birthday:                 birthday,
 		accountDiscoveryRequired: accountDiscoveryRequired,
 		syncHelper:               &syncHelper{log: params.Logger},
 	}, nil
@@ -86,6 +95,7 @@ func OpenWalletBase(params OpenWalletParams) (*WalletBase, error) {
 		network:       params.Net,
 		syncHelper:    &syncHelper{log: params.Logger},
 		encryptedSeed: encSeed,
+		birthday:      time.Unix(wd.Birthday, 0),
 	}
 
 	return w, nil
@@ -99,7 +109,8 @@ func (w *WalletBase) Network() Network {
 	return w.network
 }
 
-// DecryptSeed decrypts the encrypted wallet seed using the provided passphrase.
+// DecryptSeed decrypts the encrypted wallet seed using the provided passphrase
+// and returns the mnemonic.
 func (w *WalletBase) DecryptSeed(passphrase []byte) (string, error) {
 	w.mtx.Lock()
 	defer w.mtx.Unlock()
@@ -112,8 +123,7 @@ func (w *WalletBase) DecryptSeed(passphrase []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
-	return walletseed.EncodeMnemonic(seed), nil
+	return mnemonic.GenerateMnemonic(seed, w.birthday)
 }
 
 func (w *WalletBase) ReEncryptSeed(oldPass, newPass []byte) error {
@@ -129,7 +139,7 @@ func (w *WalletBase) ReEncryptSeed(oldPass, newPass []byte) error {
 		return err
 	}
 
-	if err := saveWalletData(reEncryptedSeed, w.dataDir); err != nil {
+	if err := saveWalletData(reEncryptedSeed, w.birthday, w.dataDir); err != nil {
 		return err
 	}
 
@@ -150,7 +160,7 @@ func (w *WalletBase) SeedVerificationRequired() bool {
 // and compares it with the provided seedMnemonic. If it's a match, the wallet
 // seed will no longer be saved.
 func (w *WalletBase) VerifySeed(seedMnemonic string, passphrase []byte) (bool, error) {
-	seedToCompare, err := walletseed.DecodeUserInput(seedMnemonic)
+	seedToCompare, _, err := mnemonic.DecodeMnemonic(seedMnemonic)
 	if err != nil {
 		return false, fmt.Errorf("invalid seed provided")
 	}

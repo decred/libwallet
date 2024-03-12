@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 
+	"decred.org/dcrdex/client/mnemonic"
 	"github.com/decred/slog"
 	"github.com/itswisdomagain/libwallet/asset"
 	"github.com/itswisdomagain/libwallet/asset/dcr"
@@ -23,7 +24,7 @@ type wallet struct {
 }
 
 //export createWallet
-func createWallet(cName, cDataDir, cNet, cPass *C.char) *C.char {
+func createWallet(cName, cDataDir, cNet, cPass, cMnemonic *C.char) *C.char {
 	walletsMtx.Lock()
 	defer walletsMtx.Unlock()
 	if !initialized {
@@ -51,7 +52,21 @@ func createWallet(cName, cDataDir, cNet, cPass *C.char) *C.char {
 		},
 		Pass: []byte(goString(cPass)),
 	}
-	w, err := dcr.CreateWallet(ctx, params, nil)
+
+	mnemonicStr := goString(cMnemonic)
+	var recoveryConfig *asset.RecoveryCfg
+	if mnemonicStr != "" {
+		seed, birthday, err := mnemonic.DecodeMnemonic(mnemonicStr)
+		if err != nil {
+			return errCResponse("unable to decode wallet mnemonic: %v", err)
+		}
+		recoveryConfig = &asset.RecoveryCfg{
+			Seed:     seed,
+			Birthday: birthday,
+		}
+	}
+
+	w, err := dcr.CreateWallet(ctx, params, recoveryConfig)
 	if err != nil {
 		return errCResponse(err.Error())
 	}

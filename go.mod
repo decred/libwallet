@@ -1,7 +1,8 @@
 module github.com/itswisdomagain/libwallet
 
 require (
-	decred.org/dcrwallet/v3 v3.0.1
+	decred.org/dcrdex v0.0.0-20240415203145-79c4689fd164
+	decred.org/dcrwallet/v3 v3.1.0
 	github.com/btcsuite/btcd v0.23.4
 	github.com/btcsuite/btcd/btcutil v1.1.3
 	github.com/btcsuite/btclog v0.0.0-20170628155309-84c8d2346e9f
@@ -56,14 +57,14 @@ require (
 	github.com/decred/dcrd/dcrjson/v4 v4.0.1 // indirect
 	github.com/decred/dcrd/gcs/v4 v4.0.0 // indirect
 	github.com/decred/dcrd/lru v1.1.1 // indirect
-	github.com/decred/dcrd/rpc/jsonrpc/types/v4 v4.0.0 // indirect
+	github.com/decred/dcrd/rpc/jsonrpc/types/v4 v4.1.0 // indirect
 	github.com/decred/go-socks v1.1.0 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/jrick/bitset v1.0.0 // indirect
 	github.com/jrick/wsrpc/v2 v2.3.5 // indirect
 	github.com/kkdai/bstream v1.0.0 // indirect
-	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
+	github.com/klauspost/cpuid/v2 v2.2.5 // indirect
 	github.com/lightninglabs/gozmq v0.0.0-20191113021534-d20a764486bf // indirect
 	github.com/lightninglabs/neutrino/cache v1.1.0 // indirect
 	github.com/lightningnetwork/lnd/clock v1.0.1 // indirect
@@ -80,9 +81,9 @@ require (
 	github.com/ltcsuite/ltcwallet/wallet/txsizes v1.1.0 // indirect
 	github.com/ltcsuite/neutrino v0.13.2 // indirect
 	github.com/stretchr/testify v1.8.2 // indirect
-	go.etcd.io/bbolt v1.3.7 // indirect
+	go.etcd.io/bbolt v1.3.8 // indirect
 	golang.org/x/sync v0.1.0 // indirect
-	golang.org/x/sys v0.6.0 // indirect
+	golang.org/x/sys v0.12.0 // indirect
 	golang.org/x/term v0.6.0 // indirect
 	lukechampine.com/blake3 v1.2.1 // indirect
 )
