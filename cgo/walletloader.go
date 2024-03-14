@@ -78,6 +78,47 @@ func createWallet(cName, cDataDir, cNet, cPass, cMnemonic *C.char) *C.char {
 	return successCResponse("wallet created")
 }
 
+//export createWatchOnlyWallet
+func createWatchOnlyWallet(cName, cDataDir, cNet, cPub *C.char) *C.char {
+	walletsMtx.Lock()
+	defer walletsMtx.Unlock()
+	if !initialized {
+		return errCResponse("libwallet is not initialized")
+	}
+
+	name := goString(cName)
+	if _, exists := wallets[name]; exists {
+		return errCResponse("wallet already exists with name: %q", name)
+	}
+
+	network, err := asset.NetFromString(goString(cNet))
+	if err != nil {
+		return errCResponse(err.Error())
+	}
+
+	logger := logBackend.Logger("[" + name + "]")
+	logger.SetLevel(slog.LevelTrace)
+	params := asset.CreateWalletParams{
+		OpenWalletParams: asset.OpenWalletParams{
+			Net:      network,
+			DataDir:  goString(cDataDir),
+			DbDriver: "bdb",
+			Logger:   logger,
+		},
+	}
+
+	w, err := dcr.CreateWatchOnlyWallet(ctx, goString(cPub), params)
+	if err != nil {
+		return errCResponse(err.Error())
+	}
+
+	wallets[name] = &wallet{
+		Wallet: w,
+		log:    logger,
+	}
+	return successCResponse("wallet created")
+}
+
 //export loadWallet
 func loadWallet(cName, cDataDir, cNet *C.char) *C.char {
 	walletsMtx.Lock()

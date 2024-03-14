@@ -73,3 +73,18 @@ func (w *Wallet) AddressesByAccount(ctx context.Context, account string) ([]stri
 	}
 	return addrs, nil
 }
+
+// AccountPubkey returns an account's extended pubkey encoded for the network.
+func (w *Wallet) AccountPubkey(ctx context.Context, acct string) (string, error) {
+	accountN, err := w.mainWallet.AccountNumber(ctx, acct)
+	if err != nil {
+		return "", err
+	}
+
+	xpub, err := w.mainWallet.AccountXpub(ctx, accountN)
+	if err != nil {
+		return "", err
+	}
+
+	return xpub.String(), nil
+}

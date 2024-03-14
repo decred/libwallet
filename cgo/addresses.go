@@ -110,3 +110,18 @@ func addresses(cName *C.char) *C.char {
 
 	return successCResponse(string(b))
 }
+
+//export defaultPubkey
+func defaultPubkey(cName *C.char) *C.char {
+	w, ok := loadedWallet(cName)
+	if !ok {
+		return errCResponse("wallet with name %q is not loaded", goString(cName))
+	}
+
+	pubkey, err := w.AccountPubkey(ctx, defaultAccount)
+	if err != nil {
+		return errCResponse("unable to get default pubkey: %v", err)
+	}
+
+	return successCResponse(pubkey)
+}
