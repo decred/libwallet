@@ -107,7 +107,7 @@ func (w *Wallet) CreateSignedTransaction(ctx context.Context, outputs []*Output,
 		for _, in := range inputs {
 			coinIDs[in.String()] = struct{}{}
 		}
-		for coin, _ := range coinIDs {
+		for coin := range coinIDs {
 			if _, has := ignoreCoinIDs[coin]; has {
 				return nil, nil, 0, fmt.Errorf("ignored coin %v found in specified inputs", coin)
 			}
