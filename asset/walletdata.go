@@ -24,12 +24,12 @@ func saveWalletData(encSeed []byte, birthday time.Time, dataDir string) error {
 	}
 	file, err := json.MarshalIndent(wd, "", " ")
 	if err != nil {
-		fmt.Errorf("unable to marshal wallet data: %v", err)
+		return fmt.Errorf("unable to marshal wallet data: %v", err)
 	}
 	fp := filepath.Join(dataDir, walletDataFileName)
 	err = os.WriteFile(fp, file, 0644)
 	if err != nil {
-		fmt.Errorf("unable to write wallet data to file: %v", err)
+		return fmt.Errorf("unable to write wallet data to file: %v", err)
 	}
 	return nil
 }

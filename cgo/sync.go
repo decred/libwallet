@@ -126,7 +126,7 @@ func syncWalletStatus(cName *C.char) *C.char {
 		SyncStatusCode: int(ssc),
 		SyncStatus:     ssc.String(),
 		TargetHeight:   int(targetHeight),
-		NumPeers:       int(np),
+		NumPeers:       np,
 	}
 	switch ssc {
 	case SSCFetchingCFilters:
