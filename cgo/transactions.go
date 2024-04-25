@@ -10,7 +10,7 @@ import (
 
 	dcrwallet "decred.org/dcrwallet/v3/wallet"
 	"github.com/decred/dcrd/txscript/v4/stdaddr"
-	"github.com/itswisdomagain/libwallet/asset/dcr"
+	"github.com/decred/libwallet/asset/dcr"
 )
 
 const defaultAccount = "default"

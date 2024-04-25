@@ -1,4 +1,4 @@
-module github.com/itswisdomagain/libwallet
+module github.com/decred/libwallet
 
 require (
 	decred.org/dcrdex v0.0.0-20240415203145-79c4689fd164

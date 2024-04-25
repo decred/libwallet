@@ -8,7 +8,7 @@ import (
 	"decred.org/dcrwallet/v3/wallet"
 	"decred.org/dcrwallet/v3/wallet/udb"
 	"github.com/decred/dcrd/chaincfg/v3"
-	"github.com/itswisdomagain/libwallet/asset"
+	"github.com/decred/libwallet/asset"
 )
 
 func ParseChainParams(network asset.Network) (*chaincfg.Params, error) {
