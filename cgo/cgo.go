@@ -14,8 +14,8 @@ import (
 	"sync"
 
 	"github.com/decred/slog"
-	"github.com/itswisdomagain/libwallet/asset/dcr"
-	"github.com/itswisdomagain/libwallet/assetlog"
+	"github.com/decred/libwallet/asset/dcr"
+	"github.com/decred/libwallet/assetlog"
 )
 
 var (

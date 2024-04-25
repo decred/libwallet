@@ -11,7 +11,7 @@ import (
 	"decred.org/dcrwallet/v3/wallet/udb"
 	"github.com/decred/dcrd/connmgr/v3"
 	"github.com/decred/slog"
-	"github.com/itswisdomagain/libwallet/assetlog"
+	"github.com/decred/libwallet/assetlog"
 )
 
 // loggingInited will be set when the log rotator has been initialized.

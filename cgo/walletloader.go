@@ -8,8 +8,8 @@ import (
 
 	"decred.org/dcrdex/client/mnemonic"
 	"github.com/decred/slog"
-	"github.com/itswisdomagain/libwallet/asset"
-	"github.com/itswisdomagain/libwallet/asset/dcr"
+	"github.com/decred/libwallet/asset"
+	"github.com/decred/libwallet/asset/dcr"
 )
 
 const emptyJsonObject = "{}"

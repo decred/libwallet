@@ -10,7 +10,7 @@ import (
 	"decred.org/dcrwallet/v3/wallet"
 	_ "decred.org/dcrwallet/v3/wallet/drivers/bdb"
 	"github.com/decred/dcrd/hdkeychain/v3"
-	"github.com/itswisdomagain/libwallet/asset"
+	"github.com/decred/libwallet/asset"
 )
 
 const (

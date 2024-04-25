@@ -9,7 +9,7 @@ import (
 	"decred.org/dcrwallet/v3/wallet"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/slog"
-	"github.com/itswisdomagain/libwallet/asset"
+	"github.com/decred/libwallet/asset"
 )
 
 type mainWallet = wallet.Wallet
