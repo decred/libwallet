@@ -13,9 +13,9 @@ import (
 	"context"
 	"sync"
 
-	"github.com/decred/slog"
 	"github.com/decred/libwallet/asset/dcr"
 	"github.com/decred/libwallet/assetlog"
+	"github.com/decred/slog"
 )
 
 var (
