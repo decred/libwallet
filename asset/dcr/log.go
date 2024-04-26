@@ -10,8 +10,8 @@ import (
 	"decred.org/dcrwallet/v3/wallet"
 	"decred.org/dcrwallet/v3/wallet/udb"
 	"github.com/decred/dcrd/connmgr/v3"
-	"github.com/decred/slog"
 	"github.com/decred/libwallet/assetlog"
+	"github.com/decred/slog"
 )
 
 // loggingInited will be set when the log rotator has been initialized.
