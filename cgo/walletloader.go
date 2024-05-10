@@ -183,7 +183,8 @@ func walletBalance(cName *C.char) *C.char {
 		return errCResponse("wallet with name %q not loaded", goString(cName))
 	}
 
-	bals, err := w.AccountBalances(ctx, 0)
+	const confs = 1
+	bals, err := w.AccountBalances(ctx, confs)
 	if err != nil {
 		return errCResponse("w.AccountBalances error: %v", err)
 	}
