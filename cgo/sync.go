@@ -122,6 +122,17 @@ func syncWalletStatus(cName *C.char) *C.char {
 	}
 	targetHeight := spvSyncer.EstimateMainChainTip(ctx)
 
+	// Sometimes it appears we miss a notification during start up. This is
+	// a bandaid to put us as synced in that case.
+	//
+	// TODO: Figure out why we would miss a notification.
+	if w.IsSynced() {
+		w.syncStatusMtx.Lock()
+		ssc = SSCComplete
+		w.syncStatusCode = ssc
+		w.syncStatusMtx.Unlock()
+	}
+
 	ss := &SyncStatusRes{
 		SyncStatusCode: int(ssc),
 		SyncStatus:     ssc.String(),
