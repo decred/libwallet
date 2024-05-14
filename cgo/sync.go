@@ -126,12 +126,12 @@ func syncWalletStatus(cName *C.char) *C.char {
 	// a bandaid to put us as synced in that case.
 	//
 	// TODO: Figure out why we would miss a notification.
-	if w.IsSynced() {
-		w.syncStatusMtx.Lock()
+	w.syncStatusMtx.Lock()
+	if ssc != SSCComplete && w.IsSynced() && !w.rescanning {
 		ssc = SSCComplete
 		w.syncStatusCode = ssc
-		w.syncStatusMtx.Unlock()
 	}
+	w.syncStatusMtx.Unlock()
 
 	ss := &SyncStatusRes{
 		SyncStatusCode: int(ssc),
@@ -167,8 +167,22 @@ func rescanFromHeight(cName, cHeight *C.char) *C.char {
 	if err != nil {
 		return errCResponse("height is not an uint32: %v", err)
 	}
-	if err := w.RescanFromHeight(ctx, int32(height)); err != nil {
-		return errCResponse("rescan wallet %q error: %v", name, err.Error())
-	}
-	return successCResponse("rescan from height %d for wallet %q ok", height, name)
+	// We don't seem to get any feedback from wallet when doing rescans here.
+	// Just set status to rescanning and then to complete when done.
+	w.syncStatusMtx.Lock()
+	w.syncStatusCode = SSCRescanning
+	w.rescanning = true
+	w.syncStatusMtx.Unlock()
+	go func() {
+		defer func() {
+			w.syncStatusMtx.Lock()
+			w.syncStatusCode = SSCComplete
+			w.rescanning = false
+			w.syncStatusMtx.Unlock()
+		}()
+		if err := w.RescanFromHeight(ctx, int32(height)); err != nil {
+			log.Errorf("rescan wallet %q error: %v", name, err)
+		}
+	}()
+	return successCResponse("rescan from height %d for wallet %q started", height, name)
 }

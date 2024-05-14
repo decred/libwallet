@@ -21,6 +21,7 @@ type wallet struct {
 	syncStatusMtx                                                       sync.RWMutex
 	syncStatusCode                                                      SyncStatusCode
 	targetHeight, cfiltersHeight, headersHeight, rescanHeight, numPeers int
+	rescanning                                                          bool
 }
 
 //export createWallet
