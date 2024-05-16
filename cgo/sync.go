@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"decred.org/dcrwallet/v3/spv"
+	dcrwallet "decred.org/dcrwallet/v3/wallet"
 )
 
 //export syncWallet
@@ -42,6 +43,10 @@ func syncWallet(cName, cPeers *C.char) *C.char {
 		},
 		FetchMissingCFiltersStarted: func() {
 			w.syncStatusMtx.Lock()
+			if w.rescanning {
+				w.syncStatusMtx.Unlock()
+				return
+			}
 			w.syncStatusCode = SSCFetchingCFilters
 			w.syncStatusMtx.Unlock()
 			w.log.Info("Fetching missing cfilters started.")
@@ -57,6 +62,10 @@ func syncWallet(cName, cPeers *C.char) *C.char {
 		},
 		FetchHeadersStarted: func() {
 			w.syncStatusMtx.Lock()
+			if w.rescanning {
+				w.syncStatusMtx.Unlock()
+				return
+			}
 			w.syncStatusCode = SSCFetchingHeaders
 			w.syncStatusMtx.Unlock()
 			w.log.Info("Fetching headers started.")
@@ -72,6 +81,10 @@ func syncWallet(cName, cPeers *C.char) *C.char {
 		},
 		DiscoverAddressesStarted: func() {
 			w.syncStatusMtx.Lock()
+			if w.rescanning {
+				w.syncStatusMtx.Unlock()
+				return
+			}
 			w.syncStatusCode = SSCDiscoveringAddrs
 			w.syncStatusMtx.Unlock()
 			w.log.Info("Discover addresses started.")
@@ -81,6 +94,10 @@ func syncWallet(cName, cPeers *C.char) *C.char {
 		},
 		RescanStarted: func() {
 			w.syncStatusMtx.Lock()
+			if w.rescanning {
+				w.syncStatusMtx.Unlock()
+				return
+			}
 			w.syncStatusCode = SSCRescanning
 			w.syncStatusMtx.Unlock()
 			w.log.Info("Rescan started.")
@@ -95,7 +112,7 @@ func syncWallet(cName, cPeers *C.char) *C.char {
 			w.log.Info("Rescan finished.")
 		},
 	}
-	if err := w.StartSync(ctx, ntfns, peers...); err != nil {
+	if err := w.StartSync(w.ctx, ntfns, peers...); err != nil {
 		return errCResponse(err.Error())
 	}
 	return successCResponse("sync started")
@@ -120,7 +137,7 @@ func syncWalletStatus(cName *C.char) *C.char {
 	if !is {
 		return errCResponse("backend is not an spv syncer")
 	}
-	targetHeight := spvSyncer.EstimateMainChainTip(ctx)
+	targetHeight := spvSyncer.EstimateMainChainTip(w.ctx)
 
 	// Sometimes it appears we miss a notification during start up. This is
 	// a bandaid to put us as synced in that case.
@@ -156,32 +173,56 @@ func syncWalletStatus(cName *C.char) *C.char {
 
 //export rescanFromHeight
 func rescanFromHeight(cName, cHeight *C.char) *C.char {
-	walletsMtx.Lock()
-	defer walletsMtx.Unlock()
-	name := goString(cName)
-	w, exists := wallets[name]
-	if !exists {
-		return errCResponse("wallet with name %q does not exist", name)
-	}
 	height, err := strconv.ParseUint(goString(cHeight), 10, 32)
 	if err != nil {
 		return errCResponse("height is not an uint32: %v", err)
 	}
-	// We don't seem to get any feedback from wallet when doing rescans here.
-	// Just set status to rescanning and then to complete when done.
+	name := goString(cName)
+	w, exists := loadedWallet(cName)
+	if !exists {
+		return errCResponse("wallet with name %q does not exist", name)
+	}
+	if !w.IsSynced() {
+		return errCResponseWithCode(ErrCodeNotSynced, "rescanFromHeight requested on an unsynced wallet")
+	}
 	w.syncStatusMtx.Lock()
+	if w.rescanning {
+		w.syncStatusMtx.Unlock()
+		return errCResponse("wallet %q already rescanning", name)
+	}
 	w.syncStatusCode = SSCRescanning
 	w.rescanning = true
+	w.rescanHeight = int(height)
 	w.syncStatusMtx.Unlock()
+	w.Add(1)
 	go func() {
 		defer func() {
 			w.syncStatusMtx.Lock()
 			w.syncStatusCode = SSCComplete
 			w.rescanning = false
 			w.syncStatusMtx.Unlock()
+			w.Done()
 		}()
-		if err := w.RescanFromHeight(ctx, int32(height)); err != nil {
-			log.Errorf("rescan wallet %q error: %v", name, err)
+		prog := make(chan dcrwallet.RescanProgress)
+		go func() {
+			w.RescanProgressFromHeight(w.ctx, int32(height), prog)
+		}()
+		for {
+			select {
+			case p, open := <-prog:
+				if !open {
+					return
+				}
+				if p.Err != nil {
+					log.Errorf("rescan wallet %q error: %v", name, err)
+					return
+				}
+				w.syncStatusMtx.Lock()
+				w.rescanHeight = int(p.ScannedThrough)
+				w.syncStatusMtx.Unlock()
+			case <-w.ctx.Done():
+				return
+			}
 		}
 	}()
 	return successCResponse("rescan from height %d for wallet %q started", height, name)

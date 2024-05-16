@@ -89,7 +89,6 @@ func shutdown() *C.char {
 	logMtx.Lock()
 	log.Debug("libwallet cgo shutdown")
 	logBackend.Close()
-	log = nil
 	logMtx.Unlock()
 
 	initialized = false

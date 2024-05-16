@@ -7,6 +7,7 @@ import (
 
 	"decred.org/dcrwallet/v3/p2p"
 	"decred.org/dcrwallet/v3/spv"
+	dcrwallet "decred.org/dcrwallet/v3/wallet"
 	"github.com/decred/dcrd/addrmgr/v2"
 )
 
@@ -81,7 +82,11 @@ func (w *Wallet) IsSynced() bool {
 	return false
 }
 
-// RescanFromHeight rescans the wallet from the specified height.
-func (w *Wallet) RescanFromHeight(ctx context.Context, startHeight int32) error {
-	return w.mainWallet.RescanFromHeight(ctx, w.syncer, startHeight)
+// RescanProgressFromHeight rescans for relevant transactions in all blocks in
+// the main chain starting at startHeight. Progress notifications and any
+// errors are sent to the channel p. This function blocks until the rescan
+// completes or ends in an error. p is closed before returning.
+func (w *Wallet) RescanProgressFromHeight(ctx context.Context,
+	startHeight int32, p chan<- dcrwallet.RescanProgress) {
+	w.mainWallet.RescanProgressFromHeight(ctx, w.syncer, startHeight, p)
 }

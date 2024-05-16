@@ -2,6 +2,7 @@ package main
 
 import "C"
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"sync"
@@ -17,6 +18,10 @@ const emptyJsonObject = "{}"
 type wallet struct {
 	*dcr.Wallet
 	log slog.Logger
+
+	sync.WaitGroup
+	ctx       context.Context
+	cancelCtx context.CancelFunc
 
 	syncStatusMtx                                                       sync.RWMutex
 	syncStatusCode                                                      SyncStatusCode
@@ -66,15 +71,19 @@ func createWallet(cName, cDataDir, cNet, cPass, cMnemonic *C.char) *C.char {
 			Birthday: birthday,
 		}
 	}
+	walletCtx, cancel := context.WithCancel(ctx)
 
-	w, err := dcr.CreateWallet(ctx, params, recoveryConfig)
+	w, err := dcr.CreateWallet(walletCtx, params, recoveryConfig)
 	if err != nil {
+		cancel()
 		return errCResponse(err.Error())
 	}
 
 	wallets[name] = &wallet{
-		Wallet: w,
-		log:    logger,
+		Wallet:    w,
+		log:       logger,
+		ctx:       walletCtx,
+		cancelCtx: cancel,
 	}
 	return successCResponse("wallet created")
 }
@@ -108,14 +117,19 @@ func createWatchOnlyWallet(cName, cDataDir, cNet, cPub *C.char) *C.char {
 		},
 	}
 
-	w, err := dcr.CreateWatchOnlyWallet(ctx, goString(cPub), params)
+	walletCtx, cancel := context.WithCancel(ctx)
+
+	w, err := dcr.CreateWatchOnlyWallet(walletCtx, goString(cPub), params)
 	if err != nil {
+		cancel()
 		return errCResponse(err.Error())
 	}
 
 	wallets[name] = &wallet{
-		Wallet: w,
-		log:    logger,
+		Wallet:    w,
+		log:       logger,
+		ctx:       walletCtx,
+		cancelCtx: cancel,
 	}
 	return successCResponse("wallet created")
 }
@@ -146,18 +160,25 @@ func loadWallet(cName, cDataDir, cNet *C.char) *C.char {
 		DbDriver: "bdb", // use badgerdb for mobile!
 		Logger:   logger,
 	}
-	w, err := dcr.LoadWallet(ctx, params)
+
+	walletCtx, cancel := context.WithCancel(ctx)
+
+	w, err := dcr.LoadWallet(walletCtx, params)
 	if err != nil {
+		cancel()
 		return errCResponse(err.Error())
 	}
 
-	if err = w.OpenWallet(ctx); err != nil {
+	if err = w.OpenWallet(walletCtx); err != nil {
+		cancel()
 		return errCResponse(err.Error())
 	}
 
 	wallets[name] = &wallet{
-		Wallet: w,
-		log:    logger,
+		Wallet:    w,
+		log:       logger,
+		ctx:       walletCtx,
+		cancelCtx: cancel,
 	}
 	return successCResponse(fmt.Sprintf("wallet %q loaded", name))
 }
@@ -185,7 +206,7 @@ func walletBalance(cName *C.char) *C.char {
 	}
 
 	const confs = 1
-	bals, err := w.AccountBalances(ctx, confs)
+	bals, err := w.AccountBalances(w.ctx, confs)
 	if err != nil {
 		return errCResponse("w.AccountBalances error: %v", err)
 	}
@@ -217,6 +238,8 @@ func closeWallet(cName *C.char) *C.char {
 	if !exists {
 		return errCResponse("wallet with name %q does not exist", name)
 	}
+	w.cancelCtx()
+	w.Wait()
 	if err := w.CloseWallet(); err != nil {
 		return errCResponse("close wallet %q error: %v", name, err.Error())
 	}
@@ -231,7 +254,7 @@ func changePassphrase(cName, cOldPass, cNewPass *C.char) *C.char {
 		return errCResponse("wallet with name %q not loaded", goString(cName))
 	}
 
-	err := w.MainWallet().ChangePrivatePassphrase(ctx, []byte(goString(cOldPass)),
+	err := w.MainWallet().ChangePrivatePassphrase(w.ctx, []byte(goString(cOldPass)),
 		[]byte(goString(cNewPass)))
 	if err != nil {
 		return errCResponse("w.ChangePrivatePassphrase error: %v", err)

@@ -41,7 +41,7 @@ func newExternalAddress(cName *C.char) *C.char {
 		return errCResponseWithCode(ErrCodeNotSynced, "newExternalAddress requested on an unsynced wallet")
 	}
 
-	_, err := w.NewExternalAddress(ctx, udb.DefaultAccountNum)
+	_, err := w.NewExternalAddress(w.ctx, udb.DefaultAccountNum)
 	if err != nil {
 		return errCResponse("w.NewExternalAddress error: %v", err)
 	}
@@ -68,11 +68,11 @@ func signMessage(cName, cMessage, cAddress, cPassword *C.char) *C.char {
 		return errCResponse("unable to decode address: %v", err)
 	}
 
-	if err := w.MainWallet().Unlock(ctx, []byte(goString(cPassword)), nil); err != nil {
+	if err := w.MainWallet().Unlock(w.ctx, []byte(goString(cPassword)), nil); err != nil {
 		return errCResponse("cannot unlock wallet: %v", err)
 	}
 
-	sig, err := w.MainWallet().SignMessage(ctx, goString(cMessage), addr)
+	sig, err := w.MainWallet().SignMessage(w.ctx, goString(cMessage), addr)
 	if err != nil {
 		return errCResponse("unable to sign message: %v", err)
 	}
@@ -89,7 +89,7 @@ func addresses(cName *C.char) *C.char {
 		return errCResponse("wallet with name %q is not loaded", goString(cName))
 	}
 
-	addrs, err := w.AddressesByAccount(ctx, defaultAccount)
+	addrs, err := w.AddressesByAccount(w.ctx, defaultAccount)
 	if err != nil {
 		return errCResponse("w.AddressesByAccount error: %v", err)
 	}
@@ -118,7 +118,7 @@ func defaultPubkey(cName *C.char) *C.char {
 		return errCResponse("wallet with name %q is not loaded", goString(cName))
 	}
 
-	pubkey, err := w.AccountPubkey(ctx, defaultAccount)
+	pubkey, err := w.AccountPubkey(w.ctx, defaultAccount)
 	if err != nil {
 		return errCResponse("unable to get default pubkey: %v", err)
 	}

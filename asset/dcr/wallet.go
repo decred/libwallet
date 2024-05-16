@@ -79,8 +79,6 @@ func (w *Wallet) CloseWallet() error {
 	}
 
 	w.log.Info("Wallet closed")
-	w.mainWallet = nil
-	w.db = nil
 	return nil
 }
 

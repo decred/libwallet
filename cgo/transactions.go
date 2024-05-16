@@ -54,12 +54,12 @@ func createSignedTransaction(cName, cCreateSignedTxJSONReq *C.char) *C.char {
 		ignoreInputs[i] = o
 	}
 
-	if err := w.MainWallet().Unlock(ctx, []byte(req.Password), nil); err != nil {
+	if err := w.MainWallet().Unlock(w.ctx, []byte(req.Password), nil); err != nil {
 		return errCResponse("cannot unlock wallet: %v", err)
 	}
 	defer w.MainWallet().Lock()
 
-	txBytes, txhash, fee, err := w.CreateSignedTransaction(ctx, outputs, inputs, ignoreInputs, uint64(req.FeeRate))
+	txBytes, txhash, fee, err := w.CreateSignedTransaction(w.ctx, outputs, inputs, ignoreInputs, uint64(req.FeeRate))
 	if err != nil {
 		return errCResponse("unable to sign send transaction: %v", err)
 	}
@@ -82,7 +82,7 @@ func sendRawTransaction(cName, cTxHex *C.char) *C.char {
 	if !exists {
 		return errCResponse("wallet with name %q does not exist", goString(cName))
 	}
-	txHash, err := w.SendRawTransaction(ctx, goString(cTxHex))
+	txHash, err := w.SendRawTransaction(w.ctx, goString(cTxHex))
 	if err != nil {
 		return errCResponse("unable to sign send transaction: %v", err)
 	}
@@ -95,7 +95,7 @@ func listUnspents(cName *C.char) *C.char {
 	if !exists {
 		return errCResponse("wallet with name %q does not exist", goString(cName))
 	}
-	res, err := w.MainWallet().ListUnspent(ctx, 1, math.MaxInt32, nil, defaultAccount)
+	res, err := w.MainWallet().ListUnspent(w.ctx, 1, math.MaxInt32, nil, defaultAccount)
 	if err != nil {
 		return errCResponse("unable to get unspents: %v", err)
 	}
@@ -107,7 +107,7 @@ func listUnspents(cName *C.char) *C.char {
 			return errCResponse("unable to decode address: %v", err)
 		}
 
-		ka, err := w.MainWallet().KnownAddress(ctx, addr)
+		ka, err := w.MainWallet().KnownAddress(w.ctx, addr)
 		if err != nil {
 			return errCResponse("unspent address is not known: %v", err)
 		}
@@ -139,7 +139,7 @@ func estimateFee(cName, cNBlocks *C.char) *C.char {
 	if err != nil {
 		return errCResponse("number of blocks is not a uint64: %v", err)
 	}
-	txFee, err := w.FetchFeeFromOracle(ctx, nBlocks)
+	txFee, err := w.FetchFeeFromOracle(w.ctx, nBlocks)
 	if err != nil {
 		return errCResponse("unable to get fee from oracle: %v", err)
 	}
@@ -160,7 +160,7 @@ func listTransactions(cName, cFrom, cCount *C.char) *C.char {
 	if err != nil {
 		return errCResponse("count is not an int: %v", err)
 	}
-	res, err := w.MainWallet().ListTransactions(ctx, int(from), int(count))
+	res, err := w.MainWallet().ListTransactions(w.ctx, int(from), int(count))
 	if err != nil {
 		return errCResponse("unable to get transactions: %v", err)
 	}
@@ -190,7 +190,7 @@ func bestBlock(cName *C.char) *C.char {
 	if !exists {
 		return errCResponse("wallet with name %q does not exist", goString(cName))
 	}
-	blockHash, blockHeight := w.MainWallet().MainChainTip(ctx)
+	blockHash, blockHeight := w.MainWallet().MainChainTip(w.ctx)
 	res := &BestBlockRes{
 		Hash:   blockHash.String(),
 		Height: int(blockHeight),
