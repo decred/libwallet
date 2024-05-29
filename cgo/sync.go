@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"decred.org/dcrwallet/v3/spv"
-	dcrwallet "decred.org/dcrwallet/v3/wallet"
+	"decred.org/dcrwallet/v4/spv"
+	dcrwallet "decred.org/dcrwallet/v4/wallet"
 )
 
 //export syncWallet
@@ -129,22 +129,14 @@ func syncWalletStatus(cName *C.char) *C.char {
 	var ssc, cfh, hh, rh, np = w.syncStatusCode, w.cfiltersHeight, w.headersHeight, w.rescanHeight, w.numPeers
 	w.syncStatusMtx.RUnlock()
 
-	nb, err := w.NetworkBackend()
-	if err != nil {
-		return errCResponse("unable to get network backend: %v", err)
-	}
-	spvSyncer, is := nb.(*spv.Syncer)
-	if !is {
-		return errCResponse("backend is not an spv syncer")
-	}
-	targetHeight := spvSyncer.EstimateMainChainTip(w.ctx)
+	_, targetHeight := w.MainWallet().MainChainTip(w.ctx)
 
 	// Sometimes it appears we miss a notification during start up. This is
 	// a bandaid to put us as synced in that case.
 	//
 	// TODO: Figure out why we would miss a notification.
 	w.syncStatusMtx.Lock()
-	if ssc != SSCComplete && w.IsSynced() && !w.rescanning {
+	if ssc != SSCComplete && w.IsSynced(w.ctx) && !w.rescanning {
 		ssc = SSCComplete
 		w.syncStatusCode = ssc
 	}
@@ -182,7 +174,7 @@ func rescanFromHeight(cName, cHeight *C.char) *C.char {
 	if !exists {
 		return errCResponse("wallet with name %q does not exist", name)
 	}
-	if !w.IsSynced() {
+	if !w.IsSynced(w.ctx) {
 		return errCResponseWithCode(ErrCodeNotSynced, "rescanFromHeight requested on an unsynced wallet")
 	}
 	w.syncStatusMtx.Lock()
@@ -226,4 +218,30 @@ func rescanFromHeight(cName, cHeight *C.char) *C.char {
 		}
 	}()
 	return successCResponse("rescan from height %d for wallet %q started", height, name)
+}
+
+//export birthState
+func birthState(cName *C.char) *C.char {
+	w, ok := loadedWallet(cName)
+	if !ok {
+		return errCResponse("wallet with name %q is not loaded", goString(cName))
+	}
+
+	bs, err := w.MainWallet().BirthState(w.ctx)
+	if err != nil {
+		return errCResponse("wallet.BirthState error: %v", err)
+	}
+
+	bsRes := &BirthdayState{
+		Hash:          bs.Hash.String(),
+		Height:        bs.Height,
+		Time:          bs.Time,
+		SetFromHeight: bs.SetFromHeight,
+		SetFromTime:   bs.SetFromTime,
+	}
+	b, err := json.Marshal(bsRes)
+	if err != nil {
+		return errCResponse("unable to marshal birth state result: %v", err)
+	}
+	return successCResponse(string(b))
 }

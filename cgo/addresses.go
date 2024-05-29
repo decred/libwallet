@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 
-	"decred.org/dcrwallet/v3/wallet/udb"
+	"decred.org/dcrwallet/v4/wallet/udb"
 	"github.com/decred/dcrd/txscript/v4/stdaddr"
 )
 
@@ -17,7 +17,7 @@ func currentReceiveAddress(cName *C.char) *C.char {
 	}
 
 	// Don't return an address if not synced!
-	if !w.IsSynced() {
+	if !w.IsSynced(w.ctx) {
 		return errCResponseWithCode(ErrCodeNotSynced, "currentReceiveAddress requested on an unsynced wallet")
 	}
 
@@ -37,7 +37,7 @@ func newExternalAddress(cName *C.char) *C.char {
 	}
 
 	// Don't return an address if not synced!
-	if !w.IsSynced() {
+	if !w.IsSynced(w.ctx) {
 		return errCResponseWithCode(ErrCodeNotSynced, "newExternalAddress requested on an unsynced wallet")
 	}
 
@@ -95,7 +95,7 @@ func addresses(cName *C.char) *C.char {
 	}
 
 	// w.AddressesByAccount does not include the current address.
-	if w.IsSynced() {
+	if w.IsSynced(w.ctx) {
 		addr, err := w.CurrentAddress(udb.DefaultAccountNum)
 		if err != nil {
 			return errCResponse("w.CurrentAddress error: %v", err)

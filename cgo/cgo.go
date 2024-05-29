@@ -19,9 +19,9 @@ import (
 )
 
 var (
-	ctx       context.Context
-	cancelCtx context.CancelFunc
-	wg        sync.WaitGroup
+	mainCtx       context.Context
+	cancelMainCtx context.CancelFunc
+	wg            sync.WaitGroup
 
 	logBackend *parentLogger
 	logMtx     sync.RWMutex
@@ -58,7 +58,7 @@ func initialize(cLogDir *C.char) *C.char {
 	log.SetLevel(slog.LevelTrace)
 	logMtx.Unlock()
 
-	ctx, cancelCtx = context.WithCancel(context.Background())
+	mainCtx, cancelMainCtx = context.WithCancel(context.Background())
 
 	initialized = true
 	return successCResponse("libwallet cgo initialized")
@@ -82,7 +82,7 @@ func shutdown() *C.char {
 	wallets = make(map[string]*wallet)
 
 	// Stop all remaining background processes and wait for them to stop.
-	cancelCtx()
+	cancelMainCtx()
 	wg.Wait()
 
 	// Close the logger backend as the last step.

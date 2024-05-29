@@ -71,7 +71,7 @@ func createWallet(cName, cDataDir, cNet, cPass, cMnemonic *C.char) *C.char {
 			Birthday: birthday,
 		}
 	}
-	walletCtx, cancel := context.WithCancel(ctx)
+	walletCtx, cancel := context.WithCancel(mainCtx)
 
 	w, err := dcr.CreateWallet(walletCtx, params, recoveryConfig)
 	if err != nil {
@@ -117,7 +117,7 @@ func createWatchOnlyWallet(cName, cDataDir, cNet, cPub *C.char) *C.char {
 		},
 	}
 
-	walletCtx, cancel := context.WithCancel(ctx)
+	walletCtx, cancel := context.WithCancel(mainCtx)
 
 	w, err := dcr.CreateWatchOnlyWallet(walletCtx, goString(cPub), params)
 	if err != nil {
@@ -161,7 +161,7 @@ func loadWallet(cName, cDataDir, cNet *C.char) *C.char {
 		Logger:   logger,
 	}
 
-	walletCtx, cancel := context.WithCancel(ctx)
+	walletCtx, cancel := context.WithCancel(mainCtx)
 
 	w, err := dcr.LoadWallet(walletCtx, params)
 	if err != nil {

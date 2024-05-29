@@ -7,8 +7,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"decred.org/dcrwallet/v3/wallet"
-	_ "decred.org/dcrwallet/v3/wallet/drivers/bdb"
+	"decred.org/dcrwallet/v4/wallet"
+	_ "decred.org/dcrwallet/v4/wallet/drivers/bdb"
+	"decred.org/dcrwallet/v4/wallet/udb"
 	"github.com/decred/dcrd/hdkeychain/v3"
 	"github.com/decred/libwallet/asset"
 )
@@ -98,6 +99,15 @@ func CreateWallet(ctx context.Context, params asset.CreateWalletParams, recovery
 	w, err := wallet.Open(ctx, newWalletConfig(db, chainParams))
 	if err != nil {
 		return nil, fmt.Errorf("wallet.Open error: %w", err)
+	}
+
+	birthState := &udb.BirthdayState{
+		Time:        birthday.Add(time.Hour * -24),
+		SetFromTime: true,
+	}
+
+	if err := w.SetBirthState(ctx, birthState); err != nil {
+		return nil, fmt.Errorf("wallet.SetBirthState error: %w", err)
 	}
 
 	// Upgrade the coin type if this is not a wallet recovery. If it's a

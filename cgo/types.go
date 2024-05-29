@@ -4,8 +4,9 @@ import "C"
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
-	wallettypes "decred.org/dcrwallet/v3/rpc/jsonrpc/types"
+	wallettypes "decred.org/dcrwallet/v4/rpc/jsonrpc/types"
 )
 
 const (
@@ -136,4 +137,12 @@ type ListTransactionRes struct {
 	Fee           *float64 `json:"fee,omitempty"`
 	Time          int64    `json:"time"`
 	TxID          string   `json:"txid"`
+}
+
+type BirthdayState struct {
+	Hash          string    `json:"hash"`
+	Height        uint32    `json:"height"`
+	Time          time.Time `json:"time"`
+	SetFromHeight bool      `json:"setfromheight"`
+	SetFromTime   bool      `json:"setfromtime"`
 }

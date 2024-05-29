@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"decred.org/dcrwallet/v3/spv"
-	"decred.org/dcrwallet/v3/wallet"
+	"decred.org/dcrwallet/v4/spv"
+	"decred.org/dcrwallet/v4/wallet"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/libwallet/asset"
 	"github.com/decred/slog"

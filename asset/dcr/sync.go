@@ -5,9 +5,9 @@ import (
 	"net"
 	"time"
 
-	"decred.org/dcrwallet/v3/p2p"
-	"decred.org/dcrwallet/v3/spv"
-	dcrwallet "decred.org/dcrwallet/v3/wallet"
+	"decred.org/dcrwallet/v4/p2p"
+	"decred.org/dcrwallet/v4/spv"
+	dcrwallet "decred.org/dcrwallet/v4/wallet"
 	"github.com/decred/dcrd/addrmgr/v2"
 )
 
@@ -66,8 +66,8 @@ func (w *Wallet) StartSync(ctx context.Context, ntfns *spv.Notifications, connec
 
 // IsSyncing returns true if the wallet is catching up to the mainchain's best
 // block.
-func (w *Wallet) IsSyncing() bool {
-	if w.IsSynced() {
+func (w *Wallet) IsSyncing(ctx context.Context) bool {
+	if w.IsSynced(ctx) {
 		return false
 	}
 	return w.IsSyncingOrSynced()
@@ -75,9 +75,10 @@ func (w *Wallet) IsSyncing() bool {
 
 // IsSynced returns true if the wallet has synced up to the best block on the
 // mainchain.
-func (w *Wallet) IsSynced() bool {
+func (w *Wallet) IsSynced(ctx context.Context) bool {
 	if w.syncer != nil {
-		return w.syncer.Synced()
+		synced, _ := w.syncer.Synced(ctx)
+		return synced
 	}
 	return false
 }
