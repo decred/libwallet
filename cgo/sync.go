@@ -58,6 +58,9 @@ func syncWallet(cName, cPeers *C.char) *C.char {
 			w.log.Infof("Fetching cfilters from %d to %d.", startCFiltersHeight, endCFiltersHeight)
 		},
 		FetchMissingCFiltersFinished: func() {
+			w.syncStatusMtx.Lock()
+			w.cfiltersHeight = w.targetHeight
+			w.syncStatusMtx.Unlock()
 			w.log.Info("Finished fetching missing cfilters.")
 		},
 		FetchHeadersStarted: func() {
@@ -77,6 +80,9 @@ func syncWallet(cName, cPeers *C.char) *C.char {
 			w.log.Infof("Fetching headers to %d.", lastHeaderHeight)
 		},
 		FetchHeadersFinished: func() {
+			w.syncStatusMtx.Lock()
+			w.headersHeight = w.targetHeight
+			w.syncStatusMtx.Unlock()
 			w.log.Info("Fetching headers finished.")
 		},
 		DiscoverAddressesStarted: func() {
@@ -109,6 +115,9 @@ func syncWallet(cName, cPeers *C.char) *C.char {
 			w.log.Infof("Rescanned through block %d.", rescannedThrough)
 		},
 		RescanFinished: func() {
+			w.syncStatusMtx.Lock()
+			w.rescanHeight = w.targetHeight
+			w.syncStatusMtx.Unlock()
 			w.log.Info("Rescan finished.")
 		},
 	}
@@ -129,14 +138,13 @@ func syncWalletStatus(cName *C.char) *C.char {
 	var ssc, cfh, hh, rh, np = w.syncStatusCode, w.cfiltersHeight, w.headersHeight, w.rescanHeight, w.numPeers
 	w.syncStatusMtx.RUnlock()
 
-	_, targetHeight := w.MainWallet().MainChainTip(w.ctx)
-
 	// Sometimes it appears we miss a notification during start up. This is
 	// a bandaid to put us as synced in that case.
 	//
 	// TODO: Figure out why we would miss a notification.
+	synced, targetHeight := w.IsSynced(w.ctx)
 	w.syncStatusMtx.Lock()
-	if ssc != SSCComplete && w.IsSynced(w.ctx) && !w.rescanning {
+	if ssc != SSCComplete && synced && !w.rescanning {
 		ssc = SSCComplete
 		w.syncStatusCode = ssc
 	}
@@ -174,7 +182,8 @@ func rescanFromHeight(cName, cHeight *C.char) *C.char {
 	if !exists {
 		return errCResponse("wallet with name %q does not exist", name)
 	}
-	if !w.IsSynced(w.ctx) {
+	synced, _ := w.IsSynced(w.ctx)
+	if !synced {
 		return errCResponseWithCode(ErrCodeNotSynced, "rescanFromHeight requested on an unsynced wallet")
 	}
 	w.syncStatusMtx.Lock()
@@ -231,11 +240,14 @@ func birthState(cName *C.char) *C.char {
 	if err != nil {
 		return errCResponse("wallet.BirthState error: %v", err)
 	}
+	if bs == nil {
+		return errCResponse("birth state is nil for wallet %q", goString(cName))
+	}
 
 	bsRes := &BirthdayState{
 		Hash:          bs.Hash.String(),
 		Height:        bs.Height,
-		Time:          bs.Time,
+		Time:          bs.Time.Unix(),
 		SetFromHeight: bs.SetFromHeight,
 		SetFromTime:   bs.SetFromTime,
 	}

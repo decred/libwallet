@@ -4,7 +4,6 @@ import "C"
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 
 	wallettypes "decred.org/dcrwallet/v4/rpc/jsonrpc/types"
 )
@@ -140,9 +139,9 @@ type ListTransactionRes struct {
 }
 
 type BirthdayState struct {
-	Hash          string    `json:"hash"`
-	Height        uint32    `json:"height"`
-	Time          time.Time `json:"time"`
-	SetFromHeight bool      `json:"setfromheight"`
-	SetFromTime   bool      `json:"setfromtime"`
+	Hash          string `json:"hash"`
+	Height        uint32 `json:"height"`
+	Time          int64  `json:"time"`
+	SetFromHeight bool   `json:"setfromheight"`
+	SetFromTime   bool   `json:"setfromtime"`
 }

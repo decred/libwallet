@@ -17,7 +17,8 @@ func currentReceiveAddress(cName *C.char) *C.char {
 	}
 
 	// Don't return an address if not synced!
-	if !w.IsSynced(w.ctx) {
+	synced, _ := w.IsSynced(w.ctx)
+	if !synced {
 		return errCResponseWithCode(ErrCodeNotSynced, "currentReceiveAddress requested on an unsynced wallet")
 	}
 
@@ -37,7 +38,8 @@ func newExternalAddress(cName *C.char) *C.char {
 	}
 
 	// Don't return an address if not synced!
-	if !w.IsSynced(w.ctx) {
+	synced, _ := w.IsSynced(w.ctx)
+	if !synced {
 		return errCResponseWithCode(ErrCodeNotSynced, "newExternalAddress requested on an unsynced wallet")
 	}
 
@@ -95,7 +97,8 @@ func addresses(cName *C.char) *C.char {
 	}
 
 	// w.AddressesByAccount does not include the current address.
-	if w.IsSynced(w.ctx) {
+	synced, _ := w.IsSynced(w.ctx)
+	if synced {
 		addr, err := w.CurrentAddress(udb.DefaultAccountNum)
 		if err != nil {
 			return errCResponse("w.CurrentAddress error: %v", err)

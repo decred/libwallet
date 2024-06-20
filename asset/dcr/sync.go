@@ -67,7 +67,8 @@ func (w *Wallet) StartSync(ctx context.Context, ntfns *spv.Notifications, connec
 // IsSyncing returns true if the wallet is catching up to the mainchain's best
 // block.
 func (w *Wallet) IsSyncing(ctx context.Context) bool {
-	if w.IsSynced(ctx) {
+	synced, _ := w.IsSynced(ctx)
+	if synced {
 		return false
 	}
 	return w.IsSyncingOrSynced()
@@ -75,12 +76,11 @@ func (w *Wallet) IsSyncing(ctx context.Context) bool {
 
 // IsSynced returns true if the wallet has synced up to the best block on the
 // mainchain.
-func (w *Wallet) IsSynced(ctx context.Context) bool {
+func (w *Wallet) IsSynced(ctx context.Context) (bool, int32) {
 	if w.syncer != nil {
-		synced, _ := w.syncer.Synced(ctx)
-		return synced
+		return w.syncer.Synced(ctx)
 	}
-	return false
+	return false, 0
 }
 
 // RescanProgressFromHeight rescans for relevant transactions in all blocks in
