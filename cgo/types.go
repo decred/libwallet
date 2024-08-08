@@ -136,6 +136,7 @@ type ListTransactionRes struct {
 	Fee           *float64 `json:"fee,omitempty"`
 	Time          int64    `json:"time"`
 	TxID          string   `json:"txid"`
+	Vout          uint32   `json:"vout"`
 }
 
 type BirthdayState struct {

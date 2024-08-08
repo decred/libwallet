@@ -174,6 +174,7 @@ func listTransactions(cName, cFrom, cCount *C.char) *C.char {
 			Fee:           ltw.Fee,
 			Time:          ltw.Time,
 			TxID:          ltw.TxID,
+			Vout:          ltw.Vout,
 		}
 		ltRes[i] = lt
 	}
