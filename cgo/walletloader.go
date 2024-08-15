@@ -119,7 +119,28 @@ func createWatchOnlyWallet(cName, cDataDir, cNet, cPub *C.char) *C.char {
 
 	walletCtx, cancel := context.WithCancel(mainCtx)
 
-	w, err := dcr.CreateWatchOnlyWallet(walletCtx, goString(cPub), params)
+	xpub := goString(cPub)
+	// Ensure wallet does not already exists.
+	for name, w := range wallets {
+		walletAccountNumber, err := w.AccountNumber(walletCtx, defaultAccount)
+		if err != nil {
+			cancel()
+			return errCResponse(err.Error())
+		}
+
+		walletXpub, err := w.AccountXpub(walletCtx, walletAccountNumber)
+		if err != nil {
+			cancel()
+			return errCResponse(err.Error())
+		}
+
+		if walletXpub.String() == xpub {
+			cancel()
+			return errCResponse(fmt.Sprintf("a wallet (%s) with an identical extended public key already exists", name))
+		}
+	}
+
+	w, err := dcr.CreateWatchOnlyWallet(walletCtx, xpub, params)
 	if err != nil {
 		cancel()
 		return errCResponse(err.Error())
