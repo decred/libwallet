@@ -2,6 +2,7 @@ package dcr
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"decred.org/dcrwallet/v4/wallet"
 	_ "decred.org/dcrwallet/v4/wallet/drivers/bdb"
 	"decred.org/dcrwallet/v4/wallet/udb"
+	"github.com/decred/dcrd/crypto/blake256"
 	"github.com/decred/dcrd/hdkeychain/v3"
 	"github.com/decred/libwallet/asset"
 )
@@ -89,8 +91,14 @@ func CreateWallet(ctx context.Context, params asset.CreateWalletParams, recovery
 		}
 	}()
 
+	// Adjust seed to create the same wallet as dex.
+	b := make([]byte, len(seed)+4)
+	copy(b, seed)
+	binary.BigEndian.PutUint32(b[len(seed):], 42)
+	s := blake256.Sum256(b)
+
 	// Initialize the newly created database for the wallet before opening.
-	err = wallet.Create(ctx, db, nil, params.Pass, seed, chainParams)
+	err = wallet.Create(ctx, db, nil, params.Pass, s[:], chainParams)
 	if err != nil {
 		return nil, fmt.Errorf("wallet.Create error: %w", err)
 	}
