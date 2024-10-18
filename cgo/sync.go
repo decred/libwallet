@@ -122,7 +122,7 @@ func syncWallet(cName, cPeers *C.char) *C.char {
 		},
 	}
 	if err := w.StartSync(w.ctx, ntfns, peers...); err != nil {
-		return errCResponse(err.Error())
+		return errCResponse("%v", err)
 	}
 	return successCResponse("sync started")
 }
@@ -168,7 +168,7 @@ func syncWalletStatus(cName *C.char) *C.char {
 	if err != nil {
 		return errCResponse("unable to marshal sync status result: %v", err)
 	}
-	return successCResponse(string(b))
+	return successCResponse("%s", b)
 }
 
 //export rescanFromHeight
@@ -255,5 +255,5 @@ func birthState(cName *C.char) *C.char {
 	if err != nil {
 		return errCResponse("unable to marshal birth state result: %v", err)
 	}
-	return successCResponse(string(b))
+	return successCResponse("%s", b)
 }

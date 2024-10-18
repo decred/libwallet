@@ -4,7 +4,6 @@ import "C"
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"sync"
 
 	"decred.org/dcrdex/client/mnemonic"
@@ -44,7 +43,7 @@ func createWallet(cName, cDataDir, cNet, cPass, cMnemonic *C.char) *C.char {
 
 	network, err := asset.NetFromString(goString(cNet))
 	if err != nil {
-		return errCResponse(err.Error())
+		return errCResponse("%v", err)
 	}
 
 	logger := logBackend.Logger("[" + name + "]")
@@ -76,7 +75,7 @@ func createWallet(cName, cDataDir, cNet, cPass, cMnemonic *C.char) *C.char {
 	w, err := dcr.CreateWallet(walletCtx, params, recoveryConfig)
 	if err != nil {
 		cancel()
-		return errCResponse(err.Error())
+		return errCResponse("%v", err)
 	}
 
 	wallets[name] = &wallet{
@@ -103,7 +102,7 @@ func createWatchOnlyWallet(cName, cDataDir, cNet, cPub *C.char) *C.char {
 
 	network, err := asset.NetFromString(goString(cNet))
 	if err != nil {
-		return errCResponse(err.Error())
+		return errCResponse("%v", err)
 	}
 
 	logger := logBackend.Logger("[" + name + "]")
@@ -122,7 +121,7 @@ func createWatchOnlyWallet(cName, cDataDir, cNet, cPub *C.char) *C.char {
 	w, err := dcr.CreateWatchOnlyWallet(walletCtx, goString(cPub), params)
 	if err != nil {
 		cancel()
-		return errCResponse(err.Error())
+		return errCResponse("%v", err)
 	}
 
 	wallets[name] = &wallet{
@@ -149,7 +148,7 @@ func loadWallet(cName, cDataDir, cNet *C.char) *C.char {
 
 	network, err := asset.NetFromString(goString(cNet))
 	if err != nil {
-		return errCResponse(err.Error())
+		return errCResponse("%v", err)
 	}
 
 	logger := logBackend.Logger("[" + name + "]")
@@ -166,12 +165,12 @@ func loadWallet(cName, cDataDir, cNet *C.char) *C.char {
 	w, err := dcr.LoadWallet(walletCtx, params)
 	if err != nil {
 		cancel()
-		return errCResponse(err.Error())
+		return errCResponse("%v", err)
 	}
 
 	if err = w.OpenWallet(walletCtx); err != nil {
 		cancel()
-		return errCResponse(err.Error())
+		return errCResponse("%v", err)
 	}
 
 	wallets[name] = &wallet{
@@ -180,7 +179,7 @@ func loadWallet(cName, cDataDir, cNet *C.char) *C.char {
 		ctx:       walletCtx,
 		cancelCtx: cancel,
 	}
-	return successCResponse(fmt.Sprintf("wallet %q loaded", name))
+	return successCResponse("wallet %q loaded", name)
 }
 
 //export walletSeed
@@ -195,7 +194,7 @@ func walletSeed(cName, cPass *C.char) *C.char {
 		return errCResponse("w.DecryptSeed error: %v", err)
 	}
 
-	return successCResponse(seed)
+	return successCResponse("%s", seed)
 }
 
 //export walletBalance
@@ -226,7 +225,7 @@ func walletBalance(cName *C.char) *C.char {
 		return errCResponse("marshal balMap error: %v", err)
 	}
 
-	return successCResponse(string(balJson))
+	return successCResponse("%s", balJson)
 }
 
 //export closeWallet

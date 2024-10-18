@@ -2,55 +2,32 @@ name: Build and Test
 on: [push, pull_request]
 permissions:
   contents: read
+
 jobs:
-  build-go:
+  build:
     name: Go CI
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go: ['1.20', '1.21']
+        go: ["1.22", "1.23"]
     steps:
-      - uses: awalsh128/cache-apt-pkgs-action@1850ee53f6e706525805321a3f2f863dcf73c962 #v1.3.0
-        with:
-          packages: git-restore-mtime libgtk-3-dev libwebkit2gtk-4.0-dev
-          version: 1.0
-
+      - name: Check out source
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       - name: Set up Go
-        uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe #v4.1.0
+        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
         with:
           go-version: ${{ matrix.go }}
-
-      - name: Check out source
-        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac #v4.0.0
-        with:
-          fetch-depth: 0
-      # Restore original file modification times for test cache reasons
-      - name: restore timestamps
-        run: git restore-mtime
-      - name: Install Linters
-        run: "curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.54.2"
-      - name: Use test and module cache
-        uses: actions/cache@704facf57e6136b1bc63b828d79edcd491f0ee84 #v3.3.2
+      - name: Use lint cache
+        uses: actions/cache@0c45773b623bea8c8e75f6c82b208c3cf94ea4f9 # v4.0.2
         with:
           path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: go-test-${{ matrix.go }}-${{ github.sha }}
-          restore-keys: go-test-${{ matrix.go }}
-
+            ~/.cache/golangci-lint
+          key: go-lint-${{ matrix.go }}-${{ hashFiles('./go.sum') }}
+          restore-keys: go-lint-${{ matrix.go }}
+      - name: Install Linters
+        run: "go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.60.1"
+      - name: Build
+        run: go build ./...
       - name: Test
-        env:
-          GO111MODULE: "on"
         run: |
-          ./run_tests.sh
-
-  lint-docs:
-    name: Lint Markdown
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac #v4.0.0
-    - uses: DavidAnson/markdownlint-cli2-action@3aaa38e446fbd2c288af4291aa0f55d64651050f #v12.0.0
-      continue-on-error: true
-      with:
-        globs: |
-          *.md
+          sh ./run_tests.sh

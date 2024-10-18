@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 
+	dcrwallet "decred.org/dcrwallet/v4/wallet"
 	"decred.org/dcrwallet/v4/wallet/udb"
 	"github.com/decred/dcrd/txscript/v4/stdaddr"
 )
@@ -27,7 +28,7 @@ func currentReceiveAddress(cName *C.char) *C.char {
 		return errCResponse("w.CurrentAddress error: %v", err)
 	}
 
-	return successCResponse(addr.String())
+	return successCResponse("%s", addr)
 }
 
 //export newExternalAddress
@@ -55,7 +56,7 @@ func newExternalAddress(cName *C.char) *C.char {
 		return errCResponse("w.CurrentAddress error: %v", err)
 	}
 
-	return successCResponse(addr.String())
+	return successCResponse("%s", addr)
 }
 
 //export signMessage
@@ -70,6 +71,16 @@ func signMessage(cName, cMessage, cAddress, cPassword *C.char) *C.char {
 		return errCResponse("unable to decode address: %v", err)
 	}
 
+	// Addresses must have an associated secp256k1 private key and therefore
+	// must be P2PK or P2PKH (P2SH is not allowed).
+	switch addr.(type) {
+	case *stdaddr.AddressPubKeyEcdsaSecp256k1V0:
+	case *stdaddr.AddressPubKeyHashEcdsaSecp256k1V0:
+		// Valid address types, proceed to sign.
+	default:
+		return errCResponse("invalid address type: must be P2PK or P2PKH")
+	}
+
 	if err := w.MainWallet().Unlock(w.ctx, []byte(goString(cPassword)), nil); err != nil {
 		return errCResponse("cannot unlock wallet: %v", err)
 	}
@@ -81,7 +92,42 @@ func signMessage(cName, cMessage, cAddress, cPassword *C.char) *C.char {
 
 	sEnc := base64.StdEncoding.EncodeToString(sig)
 
-	return successCResponse(sEnc)
+	return successCResponse("%s", sEnc)
+}
+
+//export verifyMessage
+func verifyMessage(cName, cMessage, cAddress, cSig *C.char) *C.char {
+	w, ok := loadedWallet(cName)
+	if !ok {
+		return errCResponse("wallet with name %q is not loaded", goString(cName))
+	}
+
+	addr, err := stdaddr.DecodeAddress(goString(cAddress), w.MainWallet().ChainParams())
+	if err != nil {
+		return errCResponse("unable to decode address: %v", err)
+	}
+
+	// Addresses must have an associated secp256k1 private key and therefore
+	// must be P2PK or P2PKH (P2SH is not allowed).
+	switch addr.(type) {
+	case *stdaddr.AddressPubKeyEcdsaSecp256k1V0:
+	case *stdaddr.AddressPubKeyHashEcdsaSecp256k1V0:
+		// Valid address types, proceed with verification.
+	default:
+		return errCResponse("invalid address type: must be P2PK or P2PKH")
+	}
+
+	sig, err := base64.StdEncoding.DecodeString(goString(cSig))
+	if err != nil {
+		return errCResponse("unable to decode signature: %v", err)
+	}
+
+	ok, err = dcrwallet.VerifyMessage(goString(cMessage), addr, sig, w.MainWallet().ChainParams())
+	if err != nil {
+		return errCResponse("unable to verify message: %v", err)
+	}
+
+	return successCResponse("%v", ok)
 }
 
 //export addresses
@@ -111,7 +157,7 @@ func addresses(cName *C.char) *C.char {
 		return errCResponse("unable to marshal addresses: %v", err)
 	}
 
-	return successCResponse(string(b))
+	return successCResponse("%s", b)
 }
 
 //export defaultPubkey
@@ -126,5 +172,5 @@ func defaultPubkey(cName *C.char) *C.char {
 		return errCResponse("unable to get default pubkey: %v", err)
 	}
 
-	return successCResponse(pubkey)
+	return successCResponse("%s", pubkey)
 }

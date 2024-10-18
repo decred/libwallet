@@ -4,7 +4,6 @@ import "C"
 import (
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"math"
 	"strconv"
 
@@ -73,7 +72,7 @@ func createSignedTransaction(cName, cCreateSignedTxJSONReq *C.char) *C.char {
 	if err != nil {
 		return errCResponse("unable to marshal sign send transaction result: %v", err)
 	}
-	return successCResponse(string(b))
+	return successCResponse("%s", b)
 }
 
 //export sendRawTransaction
@@ -86,7 +85,7 @@ func sendRawTransaction(cName, cTxHex *C.char) *C.char {
 	if err != nil {
 		return errCResponse("unable to sign send transaction: %v", err)
 	}
-	return successCResponse(txHash.String())
+	return successCResponse("%s", txHash)
 }
 
 //export listUnspents
@@ -126,7 +125,7 @@ func listUnspents(cName *C.char) *C.char {
 	if err != nil {
 		return errCResponse("unable to marshal list unspents result: %v", err)
 	}
-	return successCResponse(string(b))
+	return successCResponse("%s", b)
 }
 
 //export estimateFee
@@ -143,7 +142,7 @@ func estimateFee(cName, cNBlocks *C.char) *C.char {
 	if err != nil {
 		return errCResponse("unable to get fee from oracle: %v", err)
 	}
-	return successCResponse(fmt.Sprintf("%d", (uint64(txFee * 1e8))))
+	return successCResponse("%d", uint64(txFee*1e8))
 }
 
 //export listTransactions
@@ -182,7 +181,7 @@ func listTransactions(cName, cFrom, cCount *C.char) *C.char {
 	if err != nil {
 		return errCResponse("unable to marshal list transactions result: %v", err)
 	}
-	return successCResponse(string(b))
+	return successCResponse("%s", b)
 }
 
 //export bestBlock
@@ -200,5 +199,5 @@ func bestBlock(cName *C.char) *C.char {
 	if err != nil {
 		return errCResponse("unable to marshal best block result: %v", err)
 	}
-	return successCResponse(string(b))
+	return successCResponse("%s", b)
 }
