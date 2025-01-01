@@ -146,3 +146,9 @@ type BirthdayState struct {
 	SetFromHeight bool   `json:"setfromheight"`
 	SetFromTime   bool   `json:"setfromtime"`
 }
+
+type AddressesRes struct {
+	Used   []string `json:"used"`
+	Unused []string `json:"unused"`
+	Index  uint32   `json:"index"`
+}

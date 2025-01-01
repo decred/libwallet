@@ -4,6 +4,7 @@ import "C"
 import (
 	"encoding/base64"
 	"encoding/json"
+	"strconv"
 
 	dcrwallet "decred.org/dcrwallet/v4/wallet"
 	"decred.org/dcrwallet/v4/wallet/udb"
@@ -131,28 +132,39 @@ func verifyMessage(cName, cMessage, cAddress, cSig *C.char) *C.char {
 }
 
 //export addresses
-func addresses(cName *C.char) *C.char {
+func addresses(cName, cNUsed, cNUnused *C.char) *C.char {
 	w, ok := loadedWallet(cName)
 	if !ok {
 		return errCResponse("wallet with name %q is not loaded", goString(cName))
 	}
 
-	addrs, err := w.AddressesByAccount(w.ctx, defaultAccount)
+	nUsed, err := strconv.ParseUint(goString(cNUsed), 10, 32)
+	if err != nil {
+		return errCResponse("number of used addresses is not a uint32: %v", err)
+	}
+
+	nUnused, err := strconv.ParseUint(goString(cNUnused), 10, 32)
+	if err != nil {
+		return errCResponse("number of unused addresses is not a uint32: %v", err)
+	}
+
+	used, unused, index, err := w.AddressesByAccount(w.ctx, defaultAccount, uint32(nUsed), uint32(nUnused))
 	if err != nil {
 		return errCResponse("w.AddressesByAccount error: %v", err)
 	}
 
-	// w.AddressesByAccount does not include the current address.
+	res := &AddressesRes{
+		Used:   used,
+		Unused: []string{},
+		Index:  index,
+	}
+	// Avoid returning unused addresses if we are not synced.
 	synced, _ := w.IsSynced(w.ctx)
 	if synced {
-		addr, err := w.CurrentAddress(udb.DefaultAccountNum)
-		if err != nil {
-			return errCResponse("w.CurrentAddress error: %v", err)
-		}
-		addrs = append(addrs, addr.String())
+		res.Unused = unused
 	}
 
-	b, err := json.Marshal(addrs)
+	b, err := json.Marshal(res)
 	if err != nil {
 		return errCResponse("unable to marshal addresses: %v", err)
 	}
