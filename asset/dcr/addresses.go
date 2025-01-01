@@ -10,68 +10,79 @@ import (
 )
 
 // AddressesByAccount handles a getaddressesbyaccount request by returning
-// all addresses for an account, or an error if the requested account does
-// not exist. Does not include the current address that can be retrieved with
-// w.mainWallet.CurrentAddress.
-func (w *Wallet) AddressesByAccount(ctx context.Context, account string) ([]string, error) {
+// external addresses for an account, or an error if the requested account does
+// not exist. Returns used and unused addresses up to nUsed and nUnused. No
+// unused addresses are returned if nUnused is zero. All used addresses are
+// returned if nUsed is zero. index is the first unused index.
+func (w *Wallet) AddressesByAccount(ctx context.Context, account string, nUsed, nUnused uint32) (used, unused []string, index uint32, err error) {
 	if account == "imported" {
 		addrs, err := w.mainWallet.ImportedAddresses(ctx, account)
 		if err != nil {
-			return nil, err
+			return nil, nil, 0, err
 		}
-		addrStrs := make([]string, len(addrs))
+		addrStrs := make([]string, 0, len(addrs))
 		for i := range addrs {
-			addrStrs[i] = addrs[i].String()
+			if nUsed != 0 && uint32(i) >= nUsed {
+				break
+			}
+			addrStrs = append(addrStrs, addrs[i].String())
 		}
-		return addrStrs, nil
+		return addrStrs, nil, 0, nil
 	}
 	accountNum, err := w.mainWallet.AccountNumber(ctx, account)
 	if err != nil {
-		return nil, err
+		return nil, nil, 0, err
 	}
 	xpub, err := w.mainWallet.AccountXpub(ctx, accountNum)
 	if err != nil {
-		return nil, err
+		return nil, nil, 0, err
 	}
 	extBranch, err := xpub.Child(0)
 	if err != nil {
-		return nil, err
+		return nil, nil, 0, err
 	}
-	intBranch, err := xpub.Child(1)
+	endExt, _, err := w.mainWallet.BIP0044BranchNextIndexes(ctx, accountNum)
 	if err != nil {
-		return nil, err
-	}
-	endExt, endInt, err := w.mainWallet.BIP0044BranchNextIndexes(ctx, accountNum)
-	if err != nil {
-		return nil, err
+		return nil, nil, 0, err
 	}
 	params := w.mainWallet.ChainParams()
-	addrs := make([]string, 0, endExt+endInt)
-	appendAddrs := func(branchKey *hdkeychain.ExtendedKey, n uint32) error {
-		for i := uint32(0); i < n; i++ {
-			child, err := branchKey.Child(i)
-			if errors.Is(err, hdkeychain.ErrInvalidChild) {
-				continue
-			}
-			if err != nil {
-				return err
-			}
-			pkh := dcrutil.Hash160(child.SerializedPubKey())
-			addr, _ := stdaddr.NewAddressPubKeyHashEcdsaSecp256k1V0(
-				pkh, params)
-			addrs = append(addrs, addr.String())
+	var totalUsed, totalUnused uint32
+	if nUsed != 0 && endExt >= nUsed {
+		totalUsed = nUsed
+	} else if endExt > 0 {
+		// The returned index is unused.
+		totalUsed = endExt
+	}
+	if nUnused != 0 && endExt+nUnused < hdkeychain.HardenedKeyStart {
+		totalUnused = nUnused
+	}
+	appendAddr := func(addrs *[]string, i uint32) error {
+		child, err := extBranch.Child(i)
+		if errors.Is(err, hdkeychain.ErrInvalidChild) {
+			return nil
 		}
+		if err != nil {
+			return err
+		}
+		pkh := dcrutil.Hash160(child.SerializedPubKey())
+		addr, _ := stdaddr.NewAddressPubKeyHashEcdsaSecp256k1V0(
+			pkh, params)
+		*addrs = append(*addrs, addr.String())
 		return nil
 	}
-	err = appendAddrs(extBranch, endExt)
-	if err != nil {
-		return nil, err
+	used = make([]string, 0, totalUsed)
+	for i := uint32(0); i < totalUsed; i++ {
+		if err := appendAddr(&used, endExt-1-i); err != nil {
+			return nil, nil, 0, err
+		}
 	}
-	err = appendAddrs(intBranch, endInt)
-	if err != nil {
-		return nil, err
+	unused = make([]string, 0, totalUnused)
+	for i := uint32(0); i < totalUnused; i++ {
+		if err := appendAddr(&unused, endExt+i); err != nil {
+			return nil, nil, 0, err
+		}
 	}
-	return addrs, nil
+	return used, unused, endExt, nil
 }
 
 // AccountPubkey returns an account's extended pubkey encoded for the network.
