@@ -165,13 +165,19 @@ func listTransactions(cName, cFrom, cCount *C.char) *C.char {
 	}
 	ltRes := make([]*ListTransactionRes, len(res))
 	for i, ltw := range res {
+		// Use earliest of receive time or block time if the transaction is mined.
+		receiveTime := ltw.TimeReceived
+		if ltw.BlockTime < ltw.TimeReceived {
+			receiveTime = ltw.BlockTime
+		}
+
 		lt := &ListTransactionRes{
 			Address:       ltw.Address,
 			Amount:        ltw.Amount,
 			Category:      ltw.Category,
 			Confirmations: ltw.Confirmations,
 			Fee:           ltw.Fee,
-			Time:          ltw.Time,
+			Time:          receiveTime,
 			TxID:          ltw.TxID,
 			Vout:          ltw.Vout,
 		}
