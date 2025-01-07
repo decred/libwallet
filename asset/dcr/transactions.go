@@ -9,7 +9,6 @@ import (
 	"math/rand"
 
 	wallettypes "decred.org/dcrwallet/v4/rpc/jsonrpc/types"
-	"decred.org/dcrwallet/v4/wallet"
 	"decred.org/dcrwallet/v4/wallet/txauthor"
 	"decred.org/dcrwallet/v4/wallet/txsizes"
 	"github.com/decred/dcrd/chaincfg/chainhash"
@@ -61,9 +60,33 @@ func (in Input) String() string {
 	return fmt.Sprintf("%s:%d", in.TxID, in.Vout)
 }
 
+var _ txauthor.ChangeSource = (*changeSource)(nil)
+
+type changeSource struct {
+	script  []byte
+	version uint16
+}
+
+func (cs *changeSource) Script() (script []byte, version uint16, err error) {
+	return cs.script, cs.version, nil
+}
+
+func (cs *changeSource) ScriptSize() int {
+	return len(cs.script)
+}
+
 // CreateSignedTransaction creates a signed transaction. The wallet must be
-// unlocked before calling.
-func (w *Wallet) CreateSignedTransaction(ctx context.Context, outputs []*Output, inputs, ignoreInputs []*Input, feeRate uint64) (signedTx []byte, txid *chainhash.Hash, fee uint64, err error) {
+// unlocked before calling. sendAll will send everything to one output. In that
+// case the output's amount is ignored.
+func (w *Wallet) CreateSignedTransaction(ctx context.Context, outputs []*Output,
+	inputs, ignoreInputs []*Input, feeRate uint64, sendAll bool) (signedTx []byte,
+	txid *chainhash.Hash, fee uint64, err error) {
+	if sendAll && len(outputs) > 1 {
+		return nil, nil, 0, errors.New("send all can only be used with one recepient")
+	}
+	if len(outputs) < 1 {
+		return nil, nil, 0, errors.New("no outputs")
+	}
 	var ignoreCoinIDs = make(map[string]struct{})
 	for _, in := range ignoreInputs {
 		ignoreCoinIDs[in.String()] = struct{}{}
@@ -154,7 +177,7 @@ func (w *Wallet) CreateSignedTransaction(ctx context.Context, outputs []*Output,
 		// while choosing inputs randomly.
 		inputSource = func(target dcrutil.Amount) (detail *txauthor.InputDetail, err error) {
 			for _, utxo := range unspents {
-				if details.Amount >= target {
+				if details.Amount >= target && !sendAll {
 					break
 				}
 				coinID := fmt.Sprintf("%s:%d", utxo.TxID, utxo.Vout)
@@ -188,29 +211,43 @@ func (w *Wallet) CreateSignedTransaction(ctx context.Context, outputs []*Output,
 		accountNum = 0
 		confs      = 1
 	)
+	var atx *txauthor.AuthoredTx
 
-	atx, err := w.NewUnsignedTransaction(ctx, outs, dcrutil.Amount(feeRate), accountNum, confs,
-		wallet.OutputSelectionAlgorithmDefault, nil, inputSource)
-	if err != nil {
-		return nil, nil, 0, err
+	if sendAll {
+		// Only set the change source in order to force all funds there.
+		// OutputSelectionAlgorithm is ignored when the input source is supplied.
+		cs := &changeSource{
+			script:  outs[0].PkScript,
+			version: outs[0].Version,
+		}
+		atx, err = w.NewUnsignedTransaction(ctx, nil, dcrutil.Amount(feeRate), accountNum, confs,
+			0, cs, inputSource)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+	} else {
+		atx, err = w.NewUnsignedTransaction(ctx, outs, dcrutil.Amount(feeRate), accountNum, confs,
+			0, nil, inputSource)
+		if err != nil {
+			return nil, nil, 0, err
+		}
 	}
-
-	msgTx, err := w.signRawTransaction(ctx, atx.Tx)
-	if err != nil {
-		return nil, nil, 0, err
-	}
-
 	fee = uint64(atx.TotalInput)
 	for i := range atx.Tx.TxOut {
 		fee -= uint64(atx.Tx.TxOut[i].Value)
 	}
 
-	signedTx, err = msgTx.Bytes()
+	signedMsgTx, err := w.signRawTransaction(ctx, atx.Tx)
 	if err != nil {
 		return nil, nil, 0, err
 	}
 
-	txHash := msgTx.TxHash()
+	signedTx, err = signedMsgTx.Bytes()
+	if err != nil {
+		return nil, nil, 0, err
+	}
+
+	txHash := signedMsgTx.TxHash()
 	return signedTx, &txHash, fee, nil
 }
 
