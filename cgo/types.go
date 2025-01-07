@@ -109,6 +109,7 @@ type CreateSignedTxReq struct {
 	Inputs       []Input  `json:"inputs"`
 	IgnoreInputs []Input  `json:"ignoreinputs"`
 	FeeRate      int      `json:"feerate"`
+	SendAll      bool     `json:"sendall"`
 	Password     string   `json:"password"`
 }
 
