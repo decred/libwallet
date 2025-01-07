@@ -58,7 +58,7 @@ func createSignedTransaction(cName, cCreateSignedTxJSONReq *C.char) *C.char {
 	}
 	defer w.MainWallet().Lock()
 
-	txBytes, txhash, fee, err := w.CreateSignedTransaction(w.ctx, outputs, inputs, ignoreInputs, uint64(req.FeeRate))
+	txBytes, txhash, fee, err := w.CreateSignedTransaction(w.ctx, outputs, inputs, ignoreInputs, uint64(req.FeeRate), req.SendAll)
 	if err != nil {
 		return errCResponse("unable to sign send transaction: %v", err)
 	}
