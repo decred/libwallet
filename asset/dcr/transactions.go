@@ -8,6 +8,7 @@ import (
 	"math"
 	"math/rand"
 
+	dexdcr "decred.org/dcrdex/dex/networks/dcr"
 	wallettypes "decred.org/dcrwallet/v4/rpc/jsonrpc/types"
 	"decred.org/dcrwallet/v4/wallet"
 	"decred.org/dcrwallet/v4/wallet/txauthor"
@@ -62,19 +63,32 @@ func (in Input) String() string {
 }
 
 // CreateSignedTransaction creates a signed transaction. The wallet must be
-// unlocked before calling.
-func (w *Wallet) CreateSignedTransaction(ctx context.Context, outputs []*Output, inputs, ignoreInputs []*Input, feeRate uint64) (signedTx []byte, txid *chainhash.Hash, fee uint64, err error) {
+// unlocked before calling. sendAll will send everything to one output. In that
+// case the output's amount is ignored.
+func (w *Wallet) CreateSignedTransaction(ctx context.Context, outputs []*Output,
+	inputs, ignoreInputs []*Input, feeRate uint64, sendAll bool) (signedTx []byte,
+	txid *chainhash.Hash, fee uint64, err error) {
+	if sendAll && len(outputs) > 1 {
+		return nil, nil, 0, errors.New("send all can only be used with one recepient")
+	}
+	if len(outputs) < 1 {
+		return nil, nil, 0, errors.New("no outputs")
+	}
 	var ignoreCoinIDs = make(map[string]struct{})
 	for _, in := range ignoreInputs {
 		ignoreCoinIDs[in.String()] = struct{}{}
 	}
-	var inputSource txauthor.InputSource
+	var (
+		inputSource txauthor.InputSource
+		totalIn     uint64
+	)
 	details := new(txauthor.InputDetail)
 	addUTXO := func(utxo *wallettypes.ListUnspentResult, coinID string) error {
 		amt, err := dcrutil.NewAmount(utxo.Amount)
 		if err != nil {
 			return err
 		}
+		totalIn += uint64(amt)
 		details.Amount += amt
 		hash, err := chainhash.NewHashFromStr(utxo.TxID)
 		if err != nil {
@@ -154,7 +168,7 @@ func (w *Wallet) CreateSignedTransaction(ctx context.Context, outputs []*Output,
 		// while choosing inputs randomly.
 		inputSource = func(target dcrutil.Amount) (detail *txauthor.InputDetail, err error) {
 			for _, utxo := range unspents {
-				if details.Amount >= target {
+				if details.Amount >= target && !sendAll {
 					break
 				}
 				coinID := fmt.Sprintf("%s:%d", utxo.TxID, utxo.Vout)
@@ -188,29 +202,55 @@ func (w *Wallet) CreateSignedTransaction(ctx context.Context, outputs []*Output,
 		accountNum = 0
 		confs      = 1
 	)
+	var msgTx *wire.MsgTx
 
-	atx, err := w.NewUnsignedTransaction(ctx, outs, dcrutil.Amount(feeRate), accountNum, confs,
-		wallet.OutputSelectionAlgorithmDefault, nil, inputSource)
+	if sendAll {
+		txDetails, err := inputSource(dcrutil.Amount(totalIn))
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		msgTx = wire.NewMsgTx()
+		msgTx.TxIn = txDetails.Inputs
+		msgTx.TxOut = outs
+		msgTx.TxOut[0].Value = int64(totalIn)
+		signedMsgTx, err := w.signRawTransaction(ctx, msgTx)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		size := signedMsgTx.SerializeSize()
+		if size > w.chainParams.MaxTxSize {
+			return nil, nil, 0, errors.New("tx size is over max")
+		}
+		feeRatePerB := feeRate / 1000
+		fee = uint64(size) * feeRatePerB
+		msgTx.TxOut[0].Value -= int64(fee)
+		if fee > totalIn || dexdcr.IsDust(msgTx.TxOut[0], feeRatePerB) {
+			return nil, nil, 0, errors.New("output is dust, unable to send")
+		}
+	} else {
+		atx, err := w.NewUnsignedTransaction(ctx, outs, dcrutil.Amount(feeRate), accountNum, confs,
+			wallet.OutputSelectionAlgorithmDefault, nil, inputSource)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		msgTx = atx.Tx
+		fee = totalIn
+		for i := range msgTx.TxOut {
+			fee -= uint64(msgTx.TxOut[i].Value)
+		}
+	}
+
+	signedMsgTx, err := w.signRawTransaction(ctx, msgTx)
 	if err != nil {
 		return nil, nil, 0, err
 	}
 
-	msgTx, err := w.signRawTransaction(ctx, atx.Tx)
+	signedTx, err = signedMsgTx.Bytes()
 	if err != nil {
 		return nil, nil, 0, err
 	}
 
-	fee = uint64(atx.TotalInput)
-	for i := range atx.Tx.TxOut {
-		fee -= uint64(atx.Tx.TxOut[i].Value)
-	}
-
-	signedTx, err = msgTx.Bytes()
-	if err != nil {
-		return nil, nil, 0, err
-	}
-
-	txHash := msgTx.TxHash()
+	txHash := signedMsgTx.TxHash()
 	return signedTx, &txHash, fee, nil
 }
 
