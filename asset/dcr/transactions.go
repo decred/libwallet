@@ -9,6 +9,7 @@ import (
 	"math/rand"
 
 	wallettypes "decred.org/dcrwallet/v4/rpc/jsonrpc/types"
+	"decred.org/dcrwallet/v4/wallet"
 	"decred.org/dcrwallet/v4/wallet/txauthor"
 	"decred.org/dcrwallet/v4/wallet/txsizes"
 	"github.com/decred/dcrd/chaincfg/chainhash"
@@ -221,13 +222,13 @@ func (w *Wallet) CreateSignedTransaction(ctx context.Context, outputs []*Output,
 			version: outs[0].Version,
 		}
 		atx, err = w.NewUnsignedTransaction(ctx, nil, dcrutil.Amount(feeRate), accountNum, confs,
-			0, cs, inputSource)
+			wallet.OutputSelectionAlgorithmAll, cs, inputSource)
 		if err != nil {
 			return nil, nil, 0, err
 		}
 	} else {
 		atx, err = w.NewUnsignedTransaction(ctx, outs, dcrutil.Amount(feeRate), accountNum, confs,
-			0, nil, inputSource)
+			wallet.OutputSelectionAlgorithmDefault, nil, inputSource)
 		if err != nil {
 			return nil, nil, 0, err
 		}
