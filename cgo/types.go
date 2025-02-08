@@ -134,6 +134,7 @@ type ListTransactionRes struct {
 	Amount        float64  `json:"amount"`
 	Category      string   `json:"category"`
 	Confirmations int64    `json:"confirmations"`
+	Height        int64    `json:"height"`
 	Fee           *float64 `json:"fee,omitempty"`
 	Time          int64    `json:"time"`
 	TxID          string   `json:"txid"`
@@ -152,4 +153,17 @@ type AddressesRes struct {
 	Used   []string `json:"used"`
 	Unused []string `json:"unused"`
 	Index  uint32   `json:"index"`
+}
+
+type Config struct {
+	Name string `json:"name"`
+	// Allow getting unused addresses when not synced.
+	AllowUnsyncedAddrs bool   `json:"unsyncedaddrs"`
+	Net                string `json:"net"`
+	DataDir            string `json:"datadir"`
+	// Only needed during creation.
+	Pass     string `json:"pass"`
+	Mnemonic string `json:"mnemonic"`
+	// Only needed during watching only creation.
+	PubKey string `json:"pubkey"`
 }
