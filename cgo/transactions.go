@@ -163,12 +163,18 @@ func listTransactions(cName, cFrom, cCount *C.char) *C.char {
 	if err != nil {
 		return errCResponse("unable to get transactions: %v", err)
 	}
+	_, blockHeight := w.MainWallet().MainChainTip(w.ctx)
 	ltRes := make([]*ListTransactionRes, len(res))
 	for i, ltw := range res {
 		// Use earliest of receive time or block time if the transaction is mined.
 		receiveTime := ltw.TimeReceived
-		if ltw.BlockTime < ltw.TimeReceived {
+		if ltw.BlockTime != 0 && ltw.BlockTime < ltw.TimeReceived {
 			receiveTime = ltw.BlockTime
+		}
+
+		var height int64
+		if ltw.Confirmations > 0 {
+			height = int64(blockHeight) - ltw.Confirmations + 1
 		}
 
 		lt := &ListTransactionRes{
@@ -176,6 +182,7 @@ func listTransactions(cName, cFrom, cCount *C.char) *C.char {
 			Amount:        ltw.Amount,
 			Category:      ltw.Category,
 			Confirmations: ltw.Confirmations,
+			Height:        height,
 			Fee:           ltw.Fee,
 			Time:          receiveTime,
 			TxID:          ltw.TxID,

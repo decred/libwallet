@@ -25,23 +25,29 @@ type wallet struct {
 	syncStatusMtx                                                       sync.RWMutex
 	syncStatusCode                                                      SyncStatusCode
 	targetHeight, cfiltersHeight, headersHeight, rescanHeight, numPeers int
-	rescanning                                                          bool
+	rescanning, allowUnsyncedAddrs                                      bool
 }
 
 //export createWallet
-func createWallet(cName, cDataDir, cNet, cPass, cMnemonic *C.char) *C.char {
+func createWallet(cConfig *C.char) *C.char {
 	walletsMtx.Lock()
 	defer walletsMtx.Unlock()
 	if !initialized {
 		return errCResponse("libwallet is not initialized")
 	}
 
-	name := goString(cName)
+	configJSON := goString(cConfig)
+	var cfg Config
+	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
+		return errCResponse("malformed config: %v", err)
+	}
+
+	name := cfg.Name
 	if _, exists := wallets[name]; exists {
 		return errCResponse("wallet already exists with name: %q", name)
 	}
 
-	network, err := asset.NetFromString(goString(cNet))
+	network, err := asset.NetFromString(cfg.Net)
 	if err != nil {
 		return errCResponse("%v", err)
 	}
@@ -51,17 +57,16 @@ func createWallet(cName, cDataDir, cNet, cPass, cMnemonic *C.char) *C.char {
 	params := asset.CreateWalletParams{
 		OpenWalletParams: asset.OpenWalletParams{
 			Net:      network,
-			DataDir:  goString(cDataDir),
+			DataDir:  cfg.DataDir,
 			DbDriver: "bdb", // use badgerdb for mobile!
 			Logger:   logger,
 		},
-		Pass: []byte(goString(cPass)),
+		Pass: []byte(cfg.Pass),
 	}
 
-	mnemonicStr := goString(cMnemonic)
 	var recoveryConfig *asset.RecoveryCfg
-	if mnemonicStr != "" {
-		seed, birthday, err := mnemonic.DecodeMnemonic(mnemonicStr)
+	if cfg.Mnemonic != "" {
+		seed, birthday, err := mnemonic.DecodeMnemonic(cfg.Mnemonic)
 		if err != nil {
 			return errCResponse("unable to decode wallet mnemonic: %v", err)
 		}
@@ -70,6 +75,7 @@ func createWallet(cName, cDataDir, cNet, cPass, cMnemonic *C.char) *C.char {
 			Birthday: birthday,
 		}
 	}
+
 	walletCtx, cancel := context.WithCancel(mainCtx)
 
 	w, err := dcr.CreateWallet(walletCtx, params, recoveryConfig)
@@ -79,28 +85,35 @@ func createWallet(cName, cDataDir, cNet, cPass, cMnemonic *C.char) *C.char {
 	}
 
 	wallets[name] = &wallet{
-		Wallet:    w,
-		log:       logger,
-		ctx:       walletCtx,
-		cancelCtx: cancel,
+		Wallet:             w,
+		log:                logger,
+		ctx:                walletCtx,
+		cancelCtx:          cancel,
+		allowUnsyncedAddrs: cfg.AllowUnsyncedAddrs,
 	}
 	return successCResponse("wallet created")
 }
 
 //export createWatchOnlyWallet
-func createWatchOnlyWallet(cName, cDataDir, cNet, cPub *C.char) *C.char {
+func createWatchOnlyWallet(cConfig *C.char) *C.char {
 	walletsMtx.Lock()
 	defer walletsMtx.Unlock()
 	if !initialized {
 		return errCResponse("libwallet is not initialized")
 	}
 
-	name := goString(cName)
+	configJSON := goString(cConfig)
+	var cfg Config
+	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
+		return errCResponse("malformed config: %v", err)
+	}
+
+	name := cfg.Name
 	if _, exists := wallets[name]; exists {
 		return errCResponse("wallet already exists with name: %q", name)
 	}
 
-	network, err := asset.NetFromString(goString(cNet))
+	network, err := asset.NetFromString(cfg.Net)
 	if err != nil {
 		return errCResponse("%v", err)
 	}
@@ -110,7 +123,7 @@ func createWatchOnlyWallet(cName, cDataDir, cNet, cPub *C.char) *C.char {
 	params := asset.CreateWalletParams{
 		OpenWalletParams: asset.OpenWalletParams{
 			Net:      network,
-			DataDir:  goString(cDataDir),
+			DataDir:  cfg.DataDir,
 			DbDriver: "bdb",
 			Logger:   logger,
 		},
@@ -118,35 +131,42 @@ func createWatchOnlyWallet(cName, cDataDir, cNet, cPub *C.char) *C.char {
 
 	walletCtx, cancel := context.WithCancel(mainCtx)
 
-	w, err := dcr.CreateWatchOnlyWallet(walletCtx, goString(cPub), params)
+	w, err := dcr.CreateWatchOnlyWallet(walletCtx, cfg.PubKey, params)
 	if err != nil {
 		cancel()
 		return errCResponse("%v", err)
 	}
 
 	wallets[name] = &wallet{
-		Wallet:    w,
-		log:       logger,
-		ctx:       walletCtx,
-		cancelCtx: cancel,
+		Wallet:             w,
+		log:                logger,
+		ctx:                walletCtx,
+		cancelCtx:          cancel,
+		allowUnsyncedAddrs: cfg.AllowUnsyncedAddrs,
 	}
 	return successCResponse("wallet created")
 }
 
 //export loadWallet
-func loadWallet(cName, cDataDir, cNet *C.char) *C.char {
+func loadWallet(cConfig *C.char) *C.char {
 	walletsMtx.Lock()
 	defer walletsMtx.Unlock()
 	if !initialized {
 		return errCResponse("libwallet is not initialized")
 	}
 
-	name := goString(cName)
+	configJSON := goString(cConfig)
+	var cfg Config
+	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
+		return errCResponse("malformed config: %v", err)
+	}
+
+	name := cfg.Name
 	if _, exists := wallets[name]; exists {
 		return successCResponse("wallet already loaded") // not an error, already loaded
 	}
 
-	network, err := asset.NetFromString(goString(cNet))
+	network, err := asset.NetFromString(cfg.Net)
 	if err != nil {
 		return errCResponse("%v", err)
 	}
@@ -155,7 +175,7 @@ func loadWallet(cName, cDataDir, cNet *C.char) *C.char {
 	logger.SetLevel(slog.LevelTrace)
 	params := asset.OpenWalletParams{
 		Net:      network,
-		DataDir:  goString(cDataDir),
+		DataDir:  cfg.DataDir,
 		DbDriver: "bdb", // use badgerdb for mobile!
 		Logger:   logger,
 	}
@@ -174,10 +194,11 @@ func loadWallet(cName, cDataDir, cNet *C.char) *C.char {
 	}
 
 	wallets[name] = &wallet{
-		Wallet:    w,
-		log:       logger,
-		ctx:       walletCtx,
-		cancelCtx: cancel,
+		Wallet:             w,
+		log:                logger,
+		ctx:                walletCtx,
+		cancelCtx:          cancel,
+		allowUnsyncedAddrs: cfg.AllowUnsyncedAddrs,
 	}
 	return successCResponse("wallet %q loaded", name)
 }

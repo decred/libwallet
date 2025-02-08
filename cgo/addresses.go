@@ -18,10 +18,11 @@ func currentReceiveAddress(cName *C.char) *C.char {
 		return errCResponse("wallet with name %q is not loaded", goString(cName))
 	}
 
-	// Don't return an address if not synced!
-	synced, _ := w.IsSynced(w.ctx)
-	if !synced {
-		return errCResponseWithCode(ErrCodeNotSynced, "currentReceiveAddress requested on an unsynced wallet")
+	if !w.allowUnsyncedAddrs {
+		synced, _ := w.IsSynced(w.ctx)
+		if !synced {
+			return errCResponseWithCode(ErrCodeNotSynced, "currentReceiveAddress requested on an unsynced wallet")
+		}
 	}
 
 	addr, err := w.CurrentAddress(udb.DefaultAccountNum)
@@ -39,10 +40,11 @@ func newExternalAddress(cName *C.char) *C.char {
 		return errCResponse("wallet with name %q is not loaded", goString(cName))
 	}
 
-	// Don't return an address if not synced!
-	synced, _ := w.IsSynced(w.ctx)
-	if !synced {
-		return errCResponseWithCode(ErrCodeNotSynced, "newExternalAddress requested on an unsynced wallet")
+	if !w.allowUnsyncedAddrs {
+		synced, _ := w.IsSynced(w.ctx)
+		if !synced {
+			return errCResponseWithCode(ErrCodeNotSynced, "newExternalAddress requested on an unsynced wallet")
+		}
 	}
 
 	_, err := w.NewExternalAddress(w.ctx, udb.DefaultAccountNum)
@@ -158,9 +160,8 @@ func addresses(cName, cNUsed, cNUnused *C.char) *C.char {
 		Unused: []string{},
 		Index:  index,
 	}
-	// Avoid returning unused addresses if we are not synced.
 	synced, _ := w.IsSynced(w.ctx)
-	if synced {
+	if synced || w.allowUnsyncedAddrs {
 		res.Unused = unused
 	}
 
