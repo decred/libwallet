@@ -11,6 +11,7 @@ package main
 import "C"
 import (
 	"context"
+	"runtime"
 	"sync"
 
 	"github.com/decred/libwallet/asset/dcr"
@@ -18,26 +19,27 @@ import (
 	"github.com/decred/slog"
 )
 
-var (
-	mainCtx       context.Context
-	cancelMainCtx context.CancelFunc
-	wg            sync.WaitGroup
+type globalWallet struct {
+	ctx       context.Context
+	cancelCtx context.CancelFunc
+	wg        sync.WaitGroup
 
 	logBackend *parentLogger
-	logMtx     sync.RWMutex
 	log        slog.Logger
 
-	// walletsMtx protects wallets and initialized.
-	walletsMtx  sync.RWMutex
-	wallets     = make(map[string]*wallet)
-	initialized bool
+	wallet *wallet
+}
+
+var (
+	gwMtx sync.RWMutex
+	gw    *globalWallet
 )
 
 //export initialize
 func initialize(cLogDir *C.char) *C.char {
-	walletsMtx.Lock()
-	defer walletsMtx.Unlock()
-	if initialized {
+	gwMtx.Lock()
+	defer gwMtx.Unlock()
+	if gw != nil {
 		return errCResponse("duplicate initialization")
 	}
 
@@ -47,51 +49,52 @@ func initialize(cLogDir *C.char) *C.char {
 		return errCResponse("error initializing log rotator: %v", err)
 	}
 
-	logBackend = newParentLogger(logSpinner)
+	logBackend := newParentLogger(logSpinner)
 	err = dcr.InitGlobalLogging(logDir, logBackend)
 	if err != nil {
 		return errCResponse("error initializing logger for external pkgs: %v", err)
 	}
 
-	logMtx.Lock()
-	log = logBackend.SubLogger("[APP]")
+	log := logBackend.SubLogger("[APP]")
 	log.SetLevel(slog.LevelTrace)
-	logMtx.Unlock()
 
-	mainCtx, cancelMainCtx = context.WithCancel(context.Background())
+	ctx, cancelCtx := context.WithCancel(context.Background())
 
-	initialized = true
+	gw = &globalWallet{
+		ctx:        ctx,
+		cancelCtx:  cancelCtx,
+		logBackend: logBackend,
+		log:        log,
+	}
+
+	go func() {
+		<-ctx.Done()
+		runtime.KeepAlive(gw)
+		runtime.KeepAlive(&gwMtx)
+	}()
 	return successCResponse("libwallet cgo initialized")
 }
 
 //export shutdown
 func shutdown() *C.char {
-	logMtx.RLock()
-	log.Debug("libwallet cgo shutting down")
-	logMtx.RUnlock()
-	walletsMtx.Lock()
-	defer walletsMtx.Unlock()
-	if !initialized {
+	gwMtx.Lock()
+	defer gwMtx.Unlock()
+	if gw == nil {
 		return errCResponse("not initialized")
 	}
-	for _, wallet := range wallets {
-		if err := wallet.CloseWallet(); err != nil {
-			wallet.log.Errorf("close wallet error: %v", err)
-		}
+	gw.log.Debug("libwallet cgo shutting down")
+	if err := gw.wallet.CloseWallet(); err != nil {
+		gw.log.Errorf("close wallet error: %v", err)
 	}
-	wallets = make(map[string]*wallet)
 
 	// Stop all remaining background processes and wait for them to stop.
-	cancelMainCtx()
-	wg.Wait()
+	gw.cancelCtx()
+	gw.wg.Wait()
 
 	// Close the logger backend as the last step.
-	logMtx.Lock()
-	log.Debug("libwallet cgo shutdown")
-	logBackend.Close()
-	logMtx.Unlock()
+	gw.log.Debug("libwallet cgo shutdown")
+	gw.logBackend.Close()
 
-	initialized = false
 	return successCResponse("libwallet cgo shutdown")
 }
 

@@ -13,10 +13,13 @@ import (
 
 //export currentReceiveAddress
 func currentReceiveAddress(cName *C.char) *C.char {
-	w, ok := loadedWallet(cName)
-	if !ok {
-		return errCResponse("wallet with name %q is not loaded", goString(cName))
+	gwMtx.RLock()
+	defer gwMtx.RUnlock()
+	name := goString(cName)
+	if gw == nil || gw.wallet == nil || gw.wallet.name != name {
+		return errCResponse("wallet with name %q not loaded", goString(cName))
 	}
+	w := gw.wallet
 
 	if !w.allowUnsyncedAddrs {
 		synced, _ := w.IsSynced(w.ctx)
@@ -35,10 +38,13 @@ func currentReceiveAddress(cName *C.char) *C.char {
 
 //export newExternalAddress
 func newExternalAddress(cName *C.char) *C.char {
-	w, ok := loadedWallet(cName)
-	if !ok {
-		return errCResponse("wallet with name %q is not loaded", goString(cName))
+	gwMtx.RLock()
+	defer gwMtx.RUnlock()
+	name := goString(cName)
+	if gw == nil || gw.wallet == nil || gw.wallet.name != name {
+		return errCResponse("wallet with name %q not loaded", goString(cName))
 	}
+	w := gw.wallet
 
 	if !w.allowUnsyncedAddrs {
 		synced, _ := w.IsSynced(w.ctx)
@@ -64,10 +70,13 @@ func newExternalAddress(cName *C.char) *C.char {
 
 //export signMessage
 func signMessage(cName, cMessage, cAddress, cPassword *C.char) *C.char {
-	w, ok := loadedWallet(cName)
-	if !ok {
-		return errCResponse("wallet with name %q is not loaded", goString(cName))
+	gwMtx.RLock()
+	defer gwMtx.RUnlock()
+	name := goString(cName)
+	if gw == nil || gw.wallet == nil || gw.wallet.name != name {
+		return errCResponse("wallet with name %q not loaded", goString(cName))
 	}
+	w := gw.wallet
 
 	addr, err := stdaddr.DecodeAddress(goString(cAddress), w.MainWallet().ChainParams())
 	if err != nil {
@@ -100,10 +109,13 @@ func signMessage(cName, cMessage, cAddress, cPassword *C.char) *C.char {
 
 //export verifyMessage
 func verifyMessage(cName, cMessage, cAddress, cSig *C.char) *C.char {
-	w, ok := loadedWallet(cName)
-	if !ok {
-		return errCResponse("wallet with name %q is not loaded", goString(cName))
+	gwMtx.RLock()
+	defer gwMtx.RUnlock()
+	name := goString(cName)
+	if gw == nil || gw.wallet == nil || gw.wallet.name != name {
+		return errCResponse("wallet with name %q not loaded", goString(cName))
 	}
+	w := gw.wallet
 
 	addr, err := stdaddr.DecodeAddress(goString(cAddress), w.MainWallet().ChainParams())
 	if err != nil {
@@ -125,7 +137,7 @@ func verifyMessage(cName, cMessage, cAddress, cSig *C.char) *C.char {
 		return errCResponse("unable to decode signature: %v", err)
 	}
 
-	ok, err = dcrwallet.VerifyMessage(goString(cMessage), addr, sig, w.MainWallet().ChainParams())
+	ok, err := dcrwallet.VerifyMessage(goString(cMessage), addr, sig, w.MainWallet().ChainParams())
 	if err != nil {
 		return errCResponse("unable to verify message: %v", err)
 	}
@@ -135,10 +147,13 @@ func verifyMessage(cName, cMessage, cAddress, cSig *C.char) *C.char {
 
 //export addresses
 func addresses(cName, cNUsed, cNUnused *C.char) *C.char {
-	w, ok := loadedWallet(cName)
-	if !ok {
-		return errCResponse("wallet with name %q is not loaded", goString(cName))
+	gwMtx.RLock()
+	defer gwMtx.RUnlock()
+	name := goString(cName)
+	if gw == nil || gw.wallet == nil || gw.wallet.name != name {
+		return errCResponse("wallet with name %q not loaded", goString(cName))
 	}
+	w := gw.wallet
 
 	nUsed, err := strconv.ParseUint(goString(cNUsed), 10, 32)
 	if err != nil {
@@ -175,10 +190,13 @@ func addresses(cName, cNUsed, cNUnused *C.char) *C.char {
 
 //export defaultPubkey
 func defaultPubkey(cName *C.char) *C.char {
-	w, ok := loadedWallet(cName)
-	if !ok {
-		return errCResponse("wallet with name %q is not loaded", goString(cName))
+	gwMtx.RLock()
+	defer gwMtx.RUnlock()
+	name := goString(cName)
+	if gw == nil || gw.wallet == nil || gw.wallet.name != name {
+		return errCResponse("wallet with name %q not loaded", goString(cName))
 	}
+	w := gw.wallet
 
 	pubkey, err := w.AccountPubkey(w.ctx, defaultAccount)
 	if err != nil {

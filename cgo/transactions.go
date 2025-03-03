@@ -16,10 +16,13 @@ const defaultAccount = "default"
 
 //export createSignedTransaction
 func createSignedTransaction(cName, cCreateSignedTxJSONReq *C.char) *C.char {
-	w, exists := loadedWallet(cName)
-	if !exists {
-		return errCResponse("wallet with name %q does not exist", goString(cName))
+	gwMtx.RLock()
+	defer gwMtx.RUnlock()
+	name := goString(cName)
+	if gw == nil || gw.wallet == nil || gw.wallet.name != name {
+		return errCResponse("wallet with name %q not loaded", goString(cName))
 	}
+	w := gw.wallet
 	signSendJSONReq := goString(cCreateSignedTxJSONReq)
 	var req CreateSignedTxReq
 	if err := json.Unmarshal([]byte(signSendJSONReq), &req); err != nil {
@@ -77,10 +80,13 @@ func createSignedTransaction(cName, cCreateSignedTxJSONReq *C.char) *C.char {
 
 //export sendRawTransaction
 func sendRawTransaction(cName, cTxHex *C.char) *C.char {
-	w, exists := loadedWallet(cName)
-	if !exists {
-		return errCResponse("wallet with name %q does not exist", goString(cName))
+	gwMtx.RLock()
+	defer gwMtx.RUnlock()
+	name := goString(cName)
+	if gw == nil || gw.wallet == nil || gw.wallet.name != name {
+		return errCResponse("wallet with name %q not loaded", goString(cName))
 	}
+	w := gw.wallet
 	txHash, err := w.SendRawTransaction(w.ctx, goString(cTxHex))
 	if err != nil {
 		return errCResponse("unable to sign send transaction: %v", err)
@@ -90,10 +96,13 @@ func sendRawTransaction(cName, cTxHex *C.char) *C.char {
 
 //export listUnspents
 func listUnspents(cName *C.char) *C.char {
-	w, exists := loadedWallet(cName)
-	if !exists {
-		return errCResponse("wallet with name %q does not exist", goString(cName))
+	gwMtx.RLock()
+	defer gwMtx.RUnlock()
+	name := goString(cName)
+	if gw == nil || gw.wallet == nil || gw.wallet.name != name {
+		return errCResponse("wallet with name %q not loaded", goString(cName))
 	}
+	w := gw.wallet
 	res, err := w.MainWallet().ListUnspent(w.ctx, 1, math.MaxInt32, nil, defaultAccount)
 	if err != nil {
 		return errCResponse("unable to get unspents: %v", err)
@@ -130,10 +139,13 @@ func listUnspents(cName *C.char) *C.char {
 
 //export estimateFee
 func estimateFee(cName, cNBlocks *C.char) *C.char {
-	w, exists := loadedWallet(cName)
-	if !exists {
-		return errCResponse("wallet with name %q does not exist", goString(cName))
+	gwMtx.RLock()
+	defer gwMtx.RUnlock()
+	name := goString(cName)
+	if gw == nil || gw.wallet == nil || gw.wallet.name != name {
+		return errCResponse("wallet with name %q not loaded", goString(cName))
 	}
+	w := gw.wallet
 	nBlocks, err := strconv.ParseUint(goString(cNBlocks), 10, 64)
 	if err != nil {
 		return errCResponse("number of blocks is not a uint64: %v", err)
@@ -147,10 +159,13 @@ func estimateFee(cName, cNBlocks *C.char) *C.char {
 
 //export listTransactions
 func listTransactions(cName, cFrom, cCount *C.char) *C.char {
-	w, exists := loadedWallet(cName)
-	if !exists {
-		return errCResponse("wallet with name %q does not exist", goString(cName))
+	gwMtx.RLock()
+	defer gwMtx.RUnlock()
+	name := goString(cName)
+	if gw == nil || gw.wallet == nil || gw.wallet.name != name {
+		return errCResponse("wallet with name %q not loaded", goString(cName))
 	}
+	w := gw.wallet
 	from, err := strconv.ParseInt(goString(cFrom), 10, 32)
 	if err != nil {
 		return errCResponse("from is not an int: %v", err)
@@ -199,10 +214,13 @@ func listTransactions(cName, cFrom, cCount *C.char) *C.char {
 
 //export bestBlock
 func bestBlock(cName *C.char) *C.char {
-	w, exists := loadedWallet(cName)
-	if !exists {
-		return errCResponse("wallet with name %q does not exist", goString(cName))
+	gwMtx.RLock()
+	defer gwMtx.RUnlock()
+	name := goString(cName)
+	if gw == nil || gw.wallet == nil || gw.wallet.name != name {
+		return errCResponse("wallet with name %q not loaded", goString(cName))
 	}
+	w := gw.wallet
 	blockHash, blockHeight := w.MainWallet().MainChainTip(w.ctx)
 	res := &BestBlockRes{
 		Hash:   blockHash.String(),
