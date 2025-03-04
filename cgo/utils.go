@@ -5,18 +5,6 @@ import (
 	"fmt"
 )
 
-func loadedWallet(cName *C.char) (*wallet, bool) {
-	walletsMtx.Lock()
-	defer walletsMtx.Unlock()
-
-	name := goString(cName)
-	w, ok := wallets[name]
-	if !ok {
-		log.Debugf("attempted to use an unloaded wallet %q", name)
-	}
-	return w, ok
-}
-
 func cString(str string) *C.char {
 	return C.CString(str)
 }

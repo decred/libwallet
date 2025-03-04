@@ -3,6 +3,7 @@ package main
 import "C"
 import (
 	"encoding/json"
+	"runtime"
 	"strconv"
 	"strings"
 
@@ -12,10 +13,13 @@ import (
 
 //export syncWallet
 func syncWallet(cName, cPeers *C.char) *C.char {
-	w, exists := loadedWallet(cName)
-	if !exists {
-		return errCResponse("wallet with name %q does not exist", goString(cName))
+	gwMtx.RLock()
+	defer gwMtx.RUnlock()
+	name := goString(cName)
+	if gw == nil || gw.wallet == nil || gw.wallet.name != name {
+		return errCResponse("wallet with name %q not loaded", goString(cName))
 	}
+	w := gw.wallet
 	var peers []string
 	for _, p := range strings.Split(goString(cPeers), ",") {
 		if p = strings.TrimSpace(p); p != "" {
@@ -124,15 +128,23 @@ func syncWallet(cName, cPeers *C.char) *C.char {
 	if err := w.StartSync(w.ctx, ntfns, peers...); err != nil {
 		return errCResponse("%v", err)
 	}
+	go func() {
+		<-w.ctx.Done()
+		runtime.KeepAlive(ntfns)
+		runtime.KeepAlive(&peers)
+	}()
 	return successCResponse("sync started")
 }
 
 //export syncWalletStatus
 func syncWalletStatus(cName *C.char) *C.char {
-	w, exists := loadedWallet(cName)
-	if !exists {
-		return errCResponse("wallet with name %q does not exist", goString(cName))
+	gwMtx.RLock()
+	defer gwMtx.RUnlock()
+	name := goString(cName)
+	if gw == nil || gw.wallet == nil || gw.wallet.name != name {
+		return errCResponse("wallet with name %q not loaded", goString(cName))
 	}
+	w := gw.wallet
 
 	w.syncStatusMtx.RLock()
 	var ssc, cfh, hh, rh, np = w.syncStatusCode, w.cfiltersHeight, w.headersHeight, w.rescanHeight, w.numPeers
@@ -173,14 +185,16 @@ func syncWalletStatus(cName *C.char) *C.char {
 
 //export rescanFromHeight
 func rescanFromHeight(cName, cHeight *C.char) *C.char {
+	gwMtx.RLock()
+	defer gwMtx.RUnlock()
+	name := goString(cName)
+	if gw == nil || gw.wallet == nil || gw.wallet.name != name {
+		return errCResponse("wallet with name %q not loaded", goString(cName))
+	}
+	w := gw.wallet
 	height, err := strconv.ParseUint(goString(cHeight), 10, 32)
 	if err != nil {
 		return errCResponse("height is not an uint32: %v", err)
-	}
-	name := goString(cName)
-	w, exists := loadedWallet(cName)
-	if !exists {
-		return errCResponse("wallet with name %q does not exist", name)
 	}
 	synced, _ := w.IsSynced(w.ctx)
 	if !synced {
@@ -215,7 +229,7 @@ func rescanFromHeight(cName, cHeight *C.char) *C.char {
 					return
 				}
 				if p.Err != nil {
-					log.Errorf("rescan wallet %q error: %v", name, err)
+					gw.log.Errorf("rescan wallet %q error: %v", name, err)
 					return
 				}
 				w.syncStatusMtx.Lock()
@@ -231,10 +245,13 @@ func rescanFromHeight(cName, cHeight *C.char) *C.char {
 
 //export birthState
 func birthState(cName *C.char) *C.char {
-	w, ok := loadedWallet(cName)
-	if !ok {
-		return errCResponse("wallet with name %q is not loaded", goString(cName))
+	gwMtx.RLock()
+	defer gwMtx.RUnlock()
+	name := goString(cName)
+	if gw == nil || gw.wallet == nil || gw.wallet.name != name {
+		return errCResponse("wallet with name %q not loaded", goString(cName))
 	}
+	w := gw.wallet
 
 	bs, err := w.MainWallet().BirthState(w.ctx)
 	if err != nil {

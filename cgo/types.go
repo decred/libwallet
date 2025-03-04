@@ -30,11 +30,6 @@ func errCResponse(errStr string, args ...any) *C.char {
 	if err != nil {
 		panic(err)
 	}
-	logMtx.RLock()
-	if log != nil {
-		log.Errorf("returning error to consumer: %v", s)
-	}
-	logMtx.RUnlock()
 	return cString(string(b))
 }
 
@@ -45,11 +40,6 @@ func errCResponseWithCode(errCode int, errStr string, args ...any) *C.char {
 	if err != nil {
 		panic(err)
 	}
-	logMtx.RLock()
-	if log != nil {
-		log.Errorf("returning error with error code %d to consumer: %v", errCode, s)
-	}
-	logMtx.RUnlock()
 	return cString(string(b))
 }
 
@@ -60,11 +50,6 @@ func successCResponse(val string, args ...any) *C.char {
 	if err != nil {
 		panic(err)
 	}
-	logMtx.RLock()
-	if log != nil {
-		log.Tracef("returning payload to consumer: %v", s)
-	}
-	logMtx.RUnlock()
 	return cString(string(b))
 }
 

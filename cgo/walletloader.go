@@ -16,7 +16,8 @@ const emptyJsonObject = "{}"
 
 type wallet struct {
 	*dcr.Wallet
-	log slog.Logger
+	log  slog.Logger
+	name string
 
 	sync.WaitGroup
 	ctx       context.Context
@@ -30,10 +31,13 @@ type wallet struct {
 
 //export createWallet
 func createWallet(cConfig *C.char) *C.char {
-	walletsMtx.Lock()
-	defer walletsMtx.Unlock()
-	if !initialized {
+	gwMtx.Lock()
+	defer gwMtx.Unlock()
+	if gw == nil {
 		return errCResponse("libwallet is not initialized")
+	}
+	if gw.wallet != nil {
+		return errCResponse("wallet already exists")
 	}
 
 	configJSON := goString(cConfig)
@@ -41,18 +45,12 @@ func createWallet(cConfig *C.char) *C.char {
 	if err := json.Unmarshal([]byte(configJSON), &cfg); err != nil {
 		return errCResponse("malformed config: %v", err)
 	}
-
-	name := cfg.Name
-	if _, exists := wallets[name]; exists {
-		return errCResponse("wallet already exists with name: %q", name)
-	}
-
 	network, err := asset.NetFromString(cfg.Net)
 	if err != nil {
 		return errCResponse("%v", err)
 	}
 
-	logger := logBackend.Logger("[" + name + "]")
+	logger := gw.logBackend.Logger("[" + cfg.Name + "]")
 	logger.SetLevel(slog.LevelTrace)
 	params := asset.CreateWalletParams{
 		OpenWalletParams: asset.OpenWalletParams{
@@ -76,7 +74,7 @@ func createWallet(cConfig *C.char) *C.char {
 		}
 	}
 
-	walletCtx, cancel := context.WithCancel(mainCtx)
+	walletCtx, cancel := context.WithCancel(gw.ctx)
 
 	w, err := dcr.CreateWallet(walletCtx, params, recoveryConfig)
 	if err != nil {
@@ -84,8 +82,9 @@ func createWallet(cConfig *C.char) *C.char {
 		return errCResponse("%v", err)
 	}
 
-	wallets[name] = &wallet{
+	gw.wallet = &wallet{
 		Wallet:             w,
+		name:               cfg.Name,
 		log:                logger,
 		ctx:                walletCtx,
 		cancelCtx:          cancel,
@@ -96,10 +95,13 @@ func createWallet(cConfig *C.char) *C.char {
 
 //export createWatchOnlyWallet
 func createWatchOnlyWallet(cConfig *C.char) *C.char {
-	walletsMtx.Lock()
-	defer walletsMtx.Unlock()
-	if !initialized {
+	gwMtx.Lock()
+	defer gwMtx.Unlock()
+	if gw == nil {
 		return errCResponse("libwallet is not initialized")
+	}
+	if gw.wallet != nil {
+		return errCResponse("wallet already exists")
 	}
 
 	configJSON := goString(cConfig)
@@ -108,17 +110,12 @@ func createWatchOnlyWallet(cConfig *C.char) *C.char {
 		return errCResponse("malformed config: %v", err)
 	}
 
-	name := cfg.Name
-	if _, exists := wallets[name]; exists {
-		return errCResponse("wallet already exists with name: %q", name)
-	}
-
 	network, err := asset.NetFromString(cfg.Net)
 	if err != nil {
 		return errCResponse("%v", err)
 	}
 
-	logger := logBackend.Logger("[" + name + "]")
+	logger := gw.logBackend.Logger("[" + cfg.Name + "]")
 	logger.SetLevel(slog.LevelTrace)
 	params := asset.CreateWalletParams{
 		OpenWalletParams: asset.OpenWalletParams{
@@ -129,7 +126,7 @@ func createWatchOnlyWallet(cConfig *C.char) *C.char {
 		},
 	}
 
-	walletCtx, cancel := context.WithCancel(mainCtx)
+	walletCtx, cancel := context.WithCancel(gw.ctx)
 
 	w, err := dcr.CreateWatchOnlyWallet(walletCtx, cfg.PubKey, params)
 	if err != nil {
@@ -137,8 +134,9 @@ func createWatchOnlyWallet(cConfig *C.char) *C.char {
 		return errCResponse("%v", err)
 	}
 
-	wallets[name] = &wallet{
+	gw.wallet = &wallet{
 		Wallet:             w,
+		name:               cfg.Name,
 		log:                logger,
 		ctx:                walletCtx,
 		cancelCtx:          cancel,
@@ -149,10 +147,14 @@ func createWatchOnlyWallet(cConfig *C.char) *C.char {
 
 //export loadWallet
 func loadWallet(cConfig *C.char) *C.char {
-	walletsMtx.Lock()
-	defer walletsMtx.Unlock()
-	if !initialized {
+	gwMtx.Lock()
+	defer gwMtx.Unlock()
+	if gw == nil {
 		return errCResponse("libwallet is not initialized")
+	}
+
+	if gw.wallet != nil {
+		return successCResponse("wallet already loaded") // not an error, already loaded
 	}
 
 	configJSON := goString(cConfig)
@@ -161,17 +163,13 @@ func loadWallet(cConfig *C.char) *C.char {
 		return errCResponse("malformed config: %v", err)
 	}
 
-	name := cfg.Name
-	if _, exists := wallets[name]; exists {
-		return successCResponse("wallet already loaded") // not an error, already loaded
-	}
-
 	network, err := asset.NetFromString(cfg.Net)
 	if err != nil {
 		return errCResponse("%v", err)
 	}
 
-	logger := logBackend.Logger("[" + name + "]")
+	name := cfg.Name
+	logger := gw.logBackend.Logger("[" + name + "]")
 	logger.SetLevel(slog.LevelTrace)
 	params := asset.OpenWalletParams{
 		Net:      network,
@@ -180,7 +178,7 @@ func loadWallet(cConfig *C.char) *C.char {
 		Logger:   logger,
 	}
 
-	walletCtx, cancel := context.WithCancel(mainCtx)
+	walletCtx, cancel := context.WithCancel(gw.ctx)
 
 	w, err := dcr.LoadWallet(walletCtx, params)
 	if err != nil {
@@ -193,8 +191,9 @@ func loadWallet(cConfig *C.char) *C.char {
 		return errCResponse("%v", err)
 	}
 
-	wallets[name] = &wallet{
+	gw.wallet = &wallet{
 		Wallet:             w,
+		name:               name,
 		log:                logger,
 		ctx:                walletCtx,
 		cancelCtx:          cancel,
@@ -205,10 +204,13 @@ func loadWallet(cConfig *C.char) *C.char {
 
 //export walletSeed
 func walletSeed(cName, cPass *C.char) *C.char {
-	w, ok := loadedWallet(cName)
-	if !ok {
-		return errCResponse("wallet with name %q not loaded", goString(cName))
+	gwMtx.RLock()
+	defer gwMtx.RUnlock()
+	name := goString(cName)
+	if gw == nil || gw.wallet == nil || gw.wallet.name != name {
+		return errCResponse("wallet with name %q not loaded", name)
 	}
+	w := gw.wallet
 
 	seed, err := w.DecryptSeed([]byte(goString(cPass)))
 	if err != nil {
@@ -220,10 +222,13 @@ func walletSeed(cName, cPass *C.char) *C.char {
 
 //export walletBalance
 func walletBalance(cName *C.char) *C.char {
-	w, ok := loadedWallet(cName)
-	if !ok {
+	gwMtx.RLock()
+	defer gwMtx.RUnlock()
+	name := goString(cName)
+	if gw == nil || gw.wallet == nil || gw.wallet.name != name {
 		return errCResponse("wallet with name %q not loaded", goString(cName))
 	}
+	w := gw.wallet
 
 	const confs = 1
 	bals, err := w.AccountBalances(w.ctx, confs)
@@ -251,28 +256,31 @@ func walletBalance(cName *C.char) *C.char {
 
 //export closeWallet
 func closeWallet(cName *C.char) *C.char {
-	walletsMtx.Lock()
-	defer walletsMtx.Unlock()
+	gwMtx.RLock()
+	defer gwMtx.RUnlock()
 	name := goString(cName)
-	w, exists := wallets[name]
-	if !exists {
-		return errCResponse("wallet with name %q does not exist", name)
+	if gw == nil || gw.wallet == nil || gw.wallet.name != name {
+		return errCResponse("wallet with name %q not loaded", goString(cName))
 	}
+	w := gw.wallet
 	w.cancelCtx()
 	w.Wait()
 	if err := w.CloseWallet(); err != nil {
 		return errCResponse("close wallet %q error: %v", name, err.Error())
 	}
-	delete(wallets, name)
+	gw.wallet = nil
 	return successCResponse("wallet %q shutdown", name)
 }
 
 //export changePassphrase
 func changePassphrase(cName, cOldPass, cNewPass *C.char) *C.char {
-	w, ok := loadedWallet(cName)
-	if !ok {
+	gwMtx.RLock()
+	defer gwMtx.RUnlock()
+	name := goString(cName)
+	if gw == nil || gw.wallet == nil || gw.wallet.name != name {
 		return errCResponse("wallet with name %q not loaded", goString(cName))
 	}
+	w := gw.wallet
 
 	err := w.MainWallet().ChangePrivatePassphrase(w.ctx, []byte(goString(cOldPass)),
 		[]byte(goString(cNewPass)))
