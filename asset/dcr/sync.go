@@ -27,24 +27,36 @@ func (w *Wallet) StartSync(ctx context.Context, ntfns *spv.Notifications, connec
 	addr := &net.TCPAddr{IP: net.ParseIP("::1"), Port: 0}
 	amgr := addrmgr.New(w.dir, net.LookupIP)
 	lp := p2p.NewLocalPeer(w.ChainParams(), addr, amgr)
-	syncer := spv.NewSyncer(w.mainWallet, lp)
-	if len(connectPeers) > 0 {
-		syncer.SetPersistentPeers(connectPeers)
+
+	// We must create a new syncer for every attempt or we will get a
+	// closing closed channel panic when close(s.initialSyncDone) happens
+	// for the second time inside dcrwallet.
+	newSyncer := func() *spv.Syncer {
+		w.syncerMtx.Lock()
+		defer w.syncerMtx.Unlock()
+		syncer := spv.NewSyncer(w.mainWallet, lp)
+		if len(connectPeers) > 0 {
+			syncer.SetPersistentPeers(connectPeers)
+		}
+		syncer.SetNotifications(ntfns)
+
+		// TODO: Set a birthday to sync from. I don't think dcrwallet allows
+		// this currently.
+
+		w.syncer = syncer
+		w.SetNetworkBackend(syncer)
+		return syncer
 	}
-	syncer.SetNotifications(ntfns)
-
-	// TODO: Set a birthday to sync from. I don't think dcrwallet allows
-	// this currently.
-
-	w.syncer = syncer
-	w.SetNetworkBackend(syncer)
 
 	// Start the syncer in a goroutine, monitor when the sync ctx is canceled
 	// and then disconnect the sync.
 	go func() {
 		for {
+			syncer := newSyncer()
 			err := syncer.Run(ctx)
 			if ctx.Err() != nil {
+				w.syncerMtx.Lock()
+				defer w.syncerMtx.Unlock()
 				// sync ctx canceled, quit syncing
 				w.syncer = nil
 				w.SetNetworkBackend(nil)
@@ -77,6 +89,8 @@ func (w *Wallet) IsSyncing(ctx context.Context) bool {
 // IsSynced returns true if the wallet has synced up to the best block on the
 // mainchain.
 func (w *Wallet) IsSynced(ctx context.Context) (bool, int32) {
+	w.syncerMtx.RLock()
+	defer w.syncerMtx.RUnlock()
 	if w.syncer != nil {
 		return w.syncer.Synced(ctx)
 	}
@@ -89,5 +103,7 @@ func (w *Wallet) IsSynced(ctx context.Context) (bool, int32) {
 // completes or ends in an error. p is closed before returning.
 func (w *Wallet) RescanProgressFromHeight(ctx context.Context,
 	startHeight int32, p chan<- dcrwallet.RescanProgress) {
+	w.syncerMtx.RLock()
+	defer w.syncerMtx.RUnlock()
 	w.mainWallet.RescanProgressFromHeight(ctx, w.syncer, startHeight, p)
 }

@@ -262,5 +262,7 @@ func (w *Wallet) SendRawTransaction(ctx context.Context, txHex string) (*chainha
 	if err := msgTx.FromBytes(msgBytes); err != nil {
 		return nil, fmt.Errorf("unable to create msgtx from bytes: %v", err)
 	}
+	w.syncerMtx.RLock()
+	defer w.syncerMtx.RUnlock()
 	return w.mainWallet.PublishTransaction(ctx, msgTx, w.syncer)
 }
