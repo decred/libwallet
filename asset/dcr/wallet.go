@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"sync"
 
 	"decred.org/dcrwallet/v4/spv"
 	"decred.org/dcrwallet/v4/wallet"
@@ -24,7 +25,8 @@ type Wallet struct {
 	db wallet.DB
 	*mainWallet
 
-	syncer *spv.Syncer
+	syncerMtx sync.RWMutex
+	syncer    *spv.Syncer
 }
 
 // MainWallet returns the main dcr wallet with the core wallet functionalities.
