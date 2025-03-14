@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -36,10 +37,13 @@ func (w *Wallet) FetchFeeFromOracle(ctx context.Context, nBlocks uint64) (float6
 	if err != nil {
 		return 0, err
 	}
+	defer httpResponse.Body.Close()
+	if httpResponse.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("unable to get fee from %s: returned status %s", url, httpResponse.Status)
+	}
 	c := make(map[uint64]float64)
 	reader := io.LimitReader(httpResponse.Body, 1<<14)
 	err = json.NewDecoder(reader).Decode(&c)
-	httpResponse.Body.Close()
 	if err != nil {
 		return 0, err
 	}

@@ -2,7 +2,7 @@ module github.com/decred/libwallet
 
 require (
 	decred.org/dcrdex v1.0.2
-	decred.org/dcrwallet/v4 v4.3.0
+	decred.org/dcrwallet/v4 v4.3.1
 	github.com/btcsuite/btclog v1.0.0
 	github.com/decred/dcrd/addrmgr/v2 v2.0.4
 	github.com/decred/dcrd/chaincfg/chainhash v1.0.4
