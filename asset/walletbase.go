@@ -21,6 +21,7 @@ type WalletBase struct {
 	mtx                      sync.Mutex
 	traits                   WalletTrait
 	encryptedSeed            []byte
+	defaultAccountXPub       string
 	birthday                 time.Time
 	accountDiscoveryRequired bool
 
@@ -29,7 +30,7 @@ type WalletBase struct {
 
 // NewWalletBase initializes a WalletBase using the information provided. The
 // wallet's seed is encrypted and saved, along with other basic wallet info.
-func NewWalletBase(params OpenWalletParams, seed, walletPass []byte, birthday time.Time, traits WalletTrait) (*WalletBase, error) {
+func NewWalletBase(params OpenWalletParams, seed, walletPass []byte, defaultAccountXPub string, birthday time.Time, traits WalletTrait) (*WalletBase, error) {
 	isWatchOnly, isRestored := isWatchOnly(traits), isRestored(traits)
 	if isWatchOnly && isRestored {
 		return nil, fmt.Errorf("invalid wallet traits: restored wallet cannot be watch only")
@@ -60,7 +61,7 @@ func NewWalletBase(params OpenWalletParams, seed, walletPass []byte, birthday ti
 	// Account discovery is only required for restored wallets.
 	accountDiscoveryRequired := isRestored
 
-	if err := saveWalletData(encryptedSeed, birthday, params.DataDir); err != nil {
+	if err := saveWalletData(encryptedSeed, defaultAccountXPub, birthday, params.DataDir); err != nil {
 		return nil, err
 	}
 
@@ -70,6 +71,7 @@ func NewWalletBase(params OpenWalletParams, seed, walletPass []byte, birthday ti
 		network:                  params.Net,
 		traits:                   traits,
 		encryptedSeed:            encryptedSeed,
+		defaultAccountXPub:       defaultAccountXPub,
 		birthday:                 birthday,
 		accountDiscoveryRequired: accountDiscoveryRequired,
 		syncHelper:               &syncHelper{log: params.Logger},
@@ -90,12 +92,13 @@ func OpenWalletBase(params OpenWalletParams) (*WalletBase, error) {
 	}
 
 	w := &WalletBase{
-		log:           params.Logger,
-		dataDir:       params.DataDir,
-		network:       params.Net,
-		syncHelper:    &syncHelper{log: params.Logger},
-		encryptedSeed: encSeed,
-		birthday:      time.Unix(wd.Birthday, 0),
+		log:                params.Logger,
+		dataDir:            params.DataDir,
+		network:            params.Net,
+		syncHelper:         &syncHelper{log: params.Logger},
+		encryptedSeed:      encSeed,
+		defaultAccountXPub: wd.DefaultAccountXPub,
+		birthday:           time.Unix(wd.Birthday, 0),
 	}
 
 	return w, nil
@@ -139,7 +142,7 @@ func (w *WalletBase) ReEncryptSeed(oldPass, newPass []byte) error {
 		return err
 	}
 
-	if err := saveWalletData(reEncryptedSeed, w.birthday, w.dataDir); err != nil {
+	if err := saveWalletData(reEncryptedSeed, w.defaultAccountXPub, w.birthday, w.dataDir); err != nil {
 		return err
 	}
 
@@ -199,15 +202,6 @@ func (w *WalletBase) IsRestored() bool {
 	return isRestored(w.traits)
 }
 
-func (w *WalletBase) AccountDiscoveryRequired() bool {
-	w.mtx.Lock()
-	defer w.mtx.Unlock()
-	return w.accountDiscoveryRequired
-}
-
-func (w *WalletBase) MarkAccountDiscoveryComplete() {
-	w.mtx.Lock()
-	defer w.mtx.Unlock()
-	w.accountDiscoveryRequired = false
-	// TODO: Update accountDiscoveryRequired value in db.
+func (w *WalletBase) DefaultAccountXPub() string {
+	return w.defaultAccountXPub
 }

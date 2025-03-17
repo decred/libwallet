@@ -9,31 +9,12 @@ import (
 	"github.com/decred/dcrd/txscript/v4/stdaddr"
 )
 
-// AddressesByAccount handles a getaddressesbyaccount request by returning
-// external addresses for an account, or an error if the requested account does
-// not exist. Returns used and unused addresses up to nUsed and nUnused. No
-// unused addresses are returned if nUnused is zero. All used addresses are
-// returned if nUsed is zero. index is the first unused index.
-func (w *Wallet) AddressesByAccount(ctx context.Context, account string, nUsed, nUnused uint32) (used, unused []string, index uint32, err error) {
-	if account == "imported" {
-		addrs, err := w.mainWallet.ImportedAddresses(ctx, account)
-		if err != nil {
-			return nil, nil, 0, err
-		}
-		addrStrs := make([]string, 0, len(addrs))
-		for i := range addrs {
-			if nUsed != 0 && uint32(i) >= nUsed {
-				break
-			}
-			addrStrs = append(addrStrs, addrs[i].String())
-		}
-		return addrStrs, nil, 0, nil
-	}
-	accountNum, err := w.mainWallet.AccountNumber(ctx, account)
-	if err != nil {
-		return nil, nil, 0, err
-	}
-	xpub, err := w.mainWallet.AccountXpub(ctx, accountNum)
+// DefaultAccountAddresses returns addresses for the default account. Returns
+// used and unused addresses up to nUsed and nUnused. No unused addresses are
+// returned if nUnused is zero. All used addresses are returned if nUsed is
+// zero. index is the first unused index.
+func (w *Wallet) DefaultAccountAddresses(ctx context.Context, nUsed, nUnused uint32) (used, unused []string, index uint32, err error) {
+	xpub, err := hdkeychain.NewKeyFromString(w.DefaultAccountXPub(), w.chainParams)
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -41,6 +22,7 @@ func (w *Wallet) AddressesByAccount(ctx context.Context, account string, nUsed, 
 	if err != nil {
 		return nil, nil, 0, err
 	}
+	const accountNum = 0
 	endExt, _, err := w.mainWallet.BIP0044BranchNextIndexes(ctx, accountNum)
 	if err != nil {
 		return nil, nil, 0, err

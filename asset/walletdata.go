@@ -12,15 +12,17 @@ import (
 const walletDataFileName = "walletdata.json"
 
 type walletData struct {
-	EncryptedSeedHex string `json:"encryptedseedhex,omitempty"`
-	Birthday         int64  `json:"birthday,omitempty"`
+	EncryptedSeedHex   string `json:"encryptedseedhex,omitempty"`
+	DefaultAccountXPub string `json:"defaultaccountxpub,omitempty"`
+	Birthday           int64  `json:"birthday,omitempty"`
 }
 
-func saveWalletData(encSeed []byte, birthday time.Time, dataDir string) error {
+func saveWalletData(encSeed []byte, defaultAccountXPub string, birthday time.Time, dataDir string) error {
 	encSeedHex := hex.EncodeToString(encSeed)
 	wd := walletData{
-		EncryptedSeedHex: encSeedHex,
-		Birthday:         birthday.Unix(),
+		EncryptedSeedHex:   encSeedHex,
+		DefaultAccountXPub: defaultAccountXPub,
+		Birthday:           birthday.Unix(),
 	}
 	file, err := json.MarshalIndent(wd, "", " ")
 	if err != nil {

@@ -150,9 +150,9 @@ func addresses(cName, cNUsed, cNUnused *C.char) *C.char {
 		return errCResponse("number of unused addresses is not a uint32: %v", err)
 	}
 
-	used, unused, index, err := w.AddressesByAccount(w.ctx, defaultAccount, uint32(nUsed), uint32(nUnused))
+	used, unused, index, err := w.DefaultAccountAddresses(w.ctx, uint32(nUsed), uint32(nUnused))
 	if err != nil {
-		return errCResponse("w.AddressesByAccount error: %v", err)
+		return errCResponse("w.DefaultAccountAddresses error: %v", err)
 	}
 
 	res := &AddressesRes{

@@ -62,7 +62,20 @@ func CreateWallet(ctx context.Context, params asset.CreateWalletParams, recovery
 		birthday = time.Now()
 	}
 
-	wb, err := asset.NewWalletBase(params.OpenWalletParams, seed, params.Pass, birthday, walletTraits)
+	// Adjust seed to create the same wallet as dex.
+	b := make([]byte, len(seed)+4)
+	copy(b, seed)
+	binary.BigEndian.PutUint32(b[len(seed):], 42)
+	tweakedSeed := blake256.Sum256(b)
+
+	_, _, _, acctKeySLIP0044Priv, err := udb.HDKeysFromSeed(tweakedSeed[:], chainParams)
+	if err != nil {
+		return nil, err
+	}
+	defer acctKeySLIP0044Priv.Zero()
+	xpub := acctKeySLIP0044Priv.Neuter()
+
+	wb, err := asset.NewWalletBase(params.OpenWalletParams, seed, params.Pass, xpub.String(), birthday, walletTraits)
 	if err != nil {
 		return nil, fmt.Errorf("NewWalletBase error: %v", err)
 	}
@@ -91,14 +104,8 @@ func CreateWallet(ctx context.Context, params asset.CreateWalletParams, recovery
 		}
 	}()
 
-	// Adjust seed to create the same wallet as dex.
-	b := make([]byte, len(seed)+4)
-	copy(b, seed)
-	binary.BigEndian.PutUint32(b[len(seed):], 42)
-	s := blake256.Sum256(b)
-
 	// Initialize the newly created database for the wallet before opening.
-	err = wallet.Create(ctx, db, nil, params.Pass, s[:], chainParams)
+	err = wallet.Create(ctx, db, nil, params.Pass, tweakedSeed[:], chainParams)
 	if err != nil {
 		return nil, fmt.Errorf("wallet.Create error: %w", err)
 	}
@@ -162,7 +169,12 @@ func CreateWatchOnlyWallet(ctx context.Context, extendedPubKey string, params as
 		return nil, fmt.Errorf("check new wallet data directory error: %w", err)
 	}
 
-	wb, err := asset.NewWalletBase(params.OpenWalletParams, nil, nil, time.Time{}, asset.WalletTraitWatchOnly)
+	xpub, err := hdkeychain.NewKeyFromString(extendedPubKey, chainParams)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse extended key: %w", err)
+	}
+
+	wb, err := asset.NewWalletBase(params.OpenWalletParams, nil, nil, xpub.String(), time.Time{}, asset.WalletTraitWatchOnly)
 	if err != nil {
 		return nil, fmt.Errorf("NewWalletBase error: %v", err)
 	}
