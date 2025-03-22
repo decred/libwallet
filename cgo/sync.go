@@ -27,19 +27,19 @@ func syncWallet(cName, cPeers *C.char) *C.char {
 			w.syncStatusMtx.Lock()
 			w.syncStatusCode = SSCComplete
 			w.syncStatusMtx.Unlock()
-			w.log.Info("Sync completed.")
+			w.log.Debug("Sync completed.")
 		},
 		PeerConnected: func(peerCount int32, addr string) {
 			w.syncStatusMtx.Lock()
 			w.numPeers = int(peerCount)
 			w.syncStatusMtx.Unlock()
-			w.log.Infof("Connected to peer at %s. %d total peers.", addr, peerCount)
+			w.log.Debugf("Connected to peer at %s. %d total peers.", addr, peerCount)
 		},
 		PeerDisconnected: func(peerCount int32, addr string) {
 			w.syncStatusMtx.Lock()
 			w.numPeers = int(peerCount)
 			w.syncStatusMtx.Unlock()
-			w.log.Infof("Disconnected from peer at %s. %d total peers.", addr, peerCount)
+			w.log.Debugf("Disconnected from peer at %s. %d total peers.", addr, peerCount)
 		},
 		FetchMissingCFiltersStarted: func() {
 			w.syncStatusMtx.Lock()
@@ -49,19 +49,19 @@ func syncWallet(cName, cPeers *C.char) *C.char {
 			}
 			w.syncStatusCode = SSCFetchingCFilters
 			w.syncStatusMtx.Unlock()
-			w.log.Info("Fetching missing cfilters started.")
+			w.log.Debug("Fetching missing cfilters started.")
 		},
 		FetchMissingCFiltersProgress: func(startCFiltersHeight, endCFiltersHeight int32) {
 			w.syncStatusMtx.Lock()
 			w.cfiltersHeight = int(endCFiltersHeight)
 			w.syncStatusMtx.Unlock()
-			w.log.Infof("Fetching cfilters from %d to %d.", startCFiltersHeight, endCFiltersHeight)
+			w.log.Debugf("Fetching cfilters from %d to %d.", startCFiltersHeight, endCFiltersHeight)
 		},
 		FetchMissingCFiltersFinished: func() {
 			w.syncStatusMtx.Lock()
 			w.cfiltersHeight = w.targetHeight
 			w.syncStatusMtx.Unlock()
-			w.log.Info("Finished fetching missing cfilters.")
+			w.log.Debug("Finished fetching missing cfilters.")
 		},
 		FetchHeadersStarted: func() {
 			w.syncStatusMtx.Lock()
@@ -71,19 +71,19 @@ func syncWallet(cName, cPeers *C.char) *C.char {
 			}
 			w.syncStatusCode = SSCFetchingHeaders
 			w.syncStatusMtx.Unlock()
-			w.log.Info("Fetching headers started.")
+			w.log.Debug("Fetching headers started.")
 		},
 		FetchHeadersProgress: func(lastHeaderHeight int32, lastHeaderTime int64) {
 			w.syncStatusMtx.Lock()
 			w.headersHeight = int(lastHeaderHeight)
 			w.syncStatusMtx.Unlock()
-			w.log.Infof("Fetching headers to %d.", lastHeaderHeight)
+			w.log.Debugf("Fetching headers to %d.", lastHeaderHeight)
 		},
 		FetchHeadersFinished: func() {
 			w.syncStatusMtx.Lock()
 			w.headersHeight = w.targetHeight
 			w.syncStatusMtx.Unlock()
-			w.log.Info("Fetching headers finished.")
+			w.log.Debug("Fetching headers finished.")
 		},
 		DiscoverAddressesStarted: func() {
 			w.syncStatusMtx.Lock()
@@ -93,10 +93,10 @@ func syncWallet(cName, cPeers *C.char) *C.char {
 			}
 			w.syncStatusCode = SSCDiscoveringAddrs
 			w.syncStatusMtx.Unlock()
-			w.log.Info("Discover addresses started.")
+			w.log.Debug("Discover addresses started.")
 		},
 		DiscoverAddressesFinished: func() {
-			w.log.Info("Discover addresses finished.")
+			w.log.Debug("Discover addresses finished.")
 		},
 		RescanStarted: func() {
 			w.syncStatusMtx.Lock()
@@ -106,19 +106,19 @@ func syncWallet(cName, cPeers *C.char) *C.char {
 			}
 			w.syncStatusCode = SSCRescanning
 			w.syncStatusMtx.Unlock()
-			w.log.Info("Rescan started.")
+			w.log.Debug("Rescan started.")
 		},
 		RescanProgress: func(rescannedThrough int32) {
 			w.syncStatusMtx.Lock()
 			w.rescanHeight = int(rescannedThrough)
 			w.syncStatusMtx.Unlock()
-			w.log.Infof("Rescanned through block %d.", rescannedThrough)
+			w.log.Debugf("Rescanned through block %d.", rescannedThrough)
 		},
 		RescanFinished: func() {
 			w.syncStatusMtx.Lock()
 			w.rescanHeight = w.targetHeight
 			w.syncStatusMtx.Unlock()
-			w.log.Info("Rescan finished.")
+			w.log.Debug("Rescan finished.")
 		},
 	}
 	if err := w.StartSync(w.ctx, ntfns, peers...); err != nil {

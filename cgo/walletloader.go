@@ -52,8 +52,7 @@ func createWallet(cConfig *C.char) *C.char {
 		return errCResponse("%v", err)
 	}
 
-	logger := logBackend.Logger("[" + name + "]")
-	logger.SetLevel(slog.LevelTrace)
+	logger := logBackend.SubLogger(name)
 	params := asset.CreateWalletParams{
 		OpenWalletParams: asset.OpenWalletParams{
 			Net:      network,
@@ -118,8 +117,7 @@ func createWatchOnlyWallet(cConfig *C.char) *C.char {
 		return errCResponse("%v", err)
 	}
 
-	logger := logBackend.Logger("[" + name + "]")
-	logger.SetLevel(slog.LevelTrace)
+	logger := logBackend.SubLogger(name)
 	params := asset.CreateWalletParams{
 		OpenWalletParams: asset.OpenWalletParams{
 			Net:      network,
@@ -171,8 +169,7 @@ func loadWallet(cConfig *C.char) *C.char {
 		return errCResponse("%v", err)
 	}
 
-	logger := logBackend.Logger("[" + name + "]")
-	logger.SetLevel(slog.LevelTrace)
+	logger := logBackend.SubLogger(name)
 	params := asset.OpenWalletParams{
 		Net:      network,
 		DataDir:  cfg.DataDir,
