@@ -33,7 +33,7 @@ const LogFileName = "external.log"
 // concurrency issues with that since btcd and btcwallet have unsupervised
 // goroutines still running after shutdown. So we leave the rotator running at
 // the risk of losing some logs.
-func InitGlobalLogging(externalLogDir string, errorLogger assetlog.ParentLogger) error {
+func InitGlobalLogging(externalLogDir string, errorLogger assetlog.ParentLogger, lvl slog.Level) error {
 	if !atomic.CompareAndSwapUint32(&loggingInited, 0, 1) {
 		return nil
 	}
@@ -45,7 +45,7 @@ func InitGlobalLogging(externalLogDir string, errorLogger assetlog.ParentLogger)
 
 	backendLog := slog.NewBackend(logSpinner)
 
-	logger := func(name string, lvl slog.Level) slog.Logger {
+	logger := func(name string) slog.Logger {
 		l := backendLog.Logger(name)
 		l.SetLevel(lvl)
 		if errorLogger != nil {
@@ -55,12 +55,12 @@ func InitGlobalLogging(externalLogDir string, errorLogger assetlog.ParentLogger)
 	}
 
 	// TODO: Do we care about logs from other packages? vsp maybe?
-	wallet.UseLogger(logger("WLLT", slog.LevelInfo))
-	udb.UseLogger(logger("UDB", slog.LevelInfo))
-	chain.UseLogger(logger("CHAIN", slog.LevelInfo))
-	spv.UseLogger(logger("SPV", slog.LevelDebug))
-	p2p.UseLogger(logger("P2P", slog.LevelInfo))
-	connmgr.UseLogger(logger("CONMGR", slog.LevelInfo))
+	wallet.UseLogger(logger("WLLT"))
+	udb.UseLogger(logger("UDB"))
+	chain.UseLogger(logger("CHAIN"))
+	spv.UseLogger(logger("SPV"))
+	p2p.UseLogger(logger("P2P"))
+	connmgr.UseLogger(logger("CONMGR"))
 
 	return nil
 }

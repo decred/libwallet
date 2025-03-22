@@ -34,28 +34,36 @@ var (
 )
 
 //export initialize
-func initialize(cLogDir *C.char) *C.char {
+func initialize(cLogDir, cLogLvl *C.char) *C.char {
 	walletsMtx.Lock()
 	defer walletsMtx.Unlock()
 	if initialized {
 		return errCResponse("duplicate initialization")
 	}
 
-	logDir := goString(cLogDir)
-	logSpinner, err := assetlog.NewRotator(logDir, "dcrwallet.log")
-	if err != nil {
-		return errCResponse("error initializing log rotator: %v", err)
+	logDir, logLvl := goString(cLogDir), goString(cLogLvl)
+	lvl, ok := slog.LevelFromString(logLvl)
+	if !ok {
+		return errCResponse("unkown log level %q", logLvl)
 	}
 
-	logBackend = newParentLogger(logSpinner)
-	err = dcr.InitGlobalLogging(logDir, logBackend)
-	if err != nil {
-		return errCResponse("error initializing logger for external pkgs: %v", err)
+	if logDir != "" {
+		logSpinner, err := assetlog.NewRotator(logDir, "dcrwallet.log")
+		if err != nil {
+			return errCResponse("error initializing log rotator: %v", err)
+		}
+
+		logBackend = newParentLogger(logSpinner, lvl)
+		err = dcr.InitGlobalLogging(logDir, logBackend, lvl)
+		if err != nil {
+			return errCResponse("error initializing logger for external pkgs: %v", err)
+		}
+	} else {
+		logBackend = newParentStdOutLogger(lvl)
 	}
 
 	logMtx.Lock()
-	log = logBackend.SubLogger("[APP]")
-	log.SetLevel(slog.LevelTrace)
+	log = logBackend.SubLogger("APP")
 	logMtx.Unlock()
 
 	mainCtx, cancelMainCtx = context.WithCancel(context.Background())
@@ -66,14 +74,14 @@ func initialize(cLogDir *C.char) *C.char {
 
 //export shutdown
 func shutdown() *C.char {
-	logMtx.RLock()
-	log.Debug("libwallet cgo shutting down")
-	logMtx.RUnlock()
 	walletsMtx.Lock()
 	defer walletsMtx.Unlock()
 	if !initialized {
 		return errCResponse("not initialized")
 	}
+	logMtx.RLock()
+	log.Debug("libwallet cgo shutting down")
+	logMtx.RUnlock()
 	for _, wallet := range wallets {
 		if err := wallet.CloseWallet(); err != nil {
 			wallet.log.Errorf("close wallet error: %v", err)
@@ -89,6 +97,7 @@ func shutdown() *C.char {
 	logMtx.Lock()
 	log.Debug("libwallet cgo shutdown")
 	logBackend.Close()
+	logBackend = nil
 	logMtx.Unlock()
 
 	initialized = false
