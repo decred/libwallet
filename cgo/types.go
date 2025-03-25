@@ -164,6 +164,10 @@ type Config struct {
 	// Only needed during creation.
 	Pass     string `json:"pass"`
 	Mnemonic string `json:"mnemonic"`
+	// If the wallet existed before but the db was deleted to reduce
+	// storage, restore from the local encrypted seed using the provided
+	// password. Also works for watching only wallets with no password.
+	UseLocalSeed bool `json:"uselocalseed"`
 	// Only needed during watching only creation.
 	PubKey string `json:"pubkey"`
 }

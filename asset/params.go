@@ -25,6 +25,7 @@ type CreateWalletParams struct {
 type RecoveryCfg struct {
 	Seed                 []byte
 	Birthday             time.Time
+	UseLocalSeed         bool
 	NumExternalAddresses uint32
 	NumInternalAddresses uint32
 }

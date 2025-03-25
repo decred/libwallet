@@ -36,7 +36,8 @@ func saveWalletData(encSeed []byte, defaultAccountXPub string, birthday time.Tim
 	return nil
 }
 
-func getWalletData(dataDir string) (*walletData, error) {
+// WalletData returns the wallet data from the data dir.
+func WalletData(dataDir string) (*walletData, error) {
 	fp := filepath.Join(dataDir, walletDataFileName)
 	b, err := os.ReadFile(fp)
 	if err != nil {

@@ -74,6 +74,11 @@ func createWallet(cConfig *C.char) *C.char {
 			Birthday: birthday,
 		}
 	}
+	if cfg.UseLocalSeed {
+		recoveryConfig = &asset.RecoveryCfg{
+			UseLocalSeed: true,
+		}
+	}
 
 	walletCtx, cancel := context.WithCancel(mainCtx)
 
@@ -129,7 +134,7 @@ func createWatchOnlyWallet(cConfig *C.char) *C.char {
 
 	walletCtx, cancel := context.WithCancel(mainCtx)
 
-	w, err := dcr.CreateWatchOnlyWallet(walletCtx, cfg.PubKey, params)
+	w, err := dcr.CreateWatchOnlyWallet(walletCtx, cfg.PubKey, params, cfg.UseLocalSeed)
 	if err != nil {
 		cancel()
 		return errCResponse("%v", err)
