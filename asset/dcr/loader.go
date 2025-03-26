@@ -3,6 +3,7 @@ package dcr
 import (
 	"context"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -40,7 +41,7 @@ func CreateWallet(ctx context.Context, params asset.CreateWalletParams, recovery
 	if exists, err := WalletExistsAt(params.DataDir); err != nil {
 		return nil, err
 	} else if exists {
-		return nil, fmt.Errorf("wallet at %q already exists", params.DataDir)
+		return nil, fmt.Errorf("wallet at %q already exists", filepath.Join(params.DataDir, walletDbName))
 	}
 
 	// Ensure the data directory for the network exists.
@@ -52,7 +53,23 @@ func CreateWallet(ctx context.Context, params asset.CreateWalletParams, recovery
 	var birthday time.Time
 	var walletTraits asset.WalletTrait
 	if recovery != nil {
-		seed, birthday = recovery.Seed, recovery.Birthday
+		if recovery.UseLocalSeed {
+			wd, err := asset.WalletData(params.DataDir)
+			if err != nil {
+				return nil, fmt.Errorf("unable to get wallet data: %v", err)
+			}
+			encSeed, err := hex.DecodeString(wd.EncryptedSeedHex)
+			if err != nil {
+				return nil, fmt.Errorf("unable to decode encrypted hex seed: %v", err)
+			}
+			seed, err = asset.DecryptData(encSeed, params.Pass)
+			if err != nil {
+				return nil, fmt.Errorf("unable to decrypt wallet seed: %v", err)
+			}
+			birthday = time.Unix(wd.Birthday, 0)
+		} else {
+			seed, birthday = recovery.Seed, recovery.Birthday
+		}
 		walletTraits = asset.WalletTraitRestored
 	} else {
 		seed, err = hdkeychain.GenerateSeed(entropyBytes)
@@ -152,7 +169,7 @@ func CreateWallet(ctx context.Context, params asset.CreateWalletParams, recovery
 }
 
 // CreateWatchOnlyWallet creates and opens a watchonly SPV wallet.
-func CreateWatchOnlyWallet(ctx context.Context, extendedPubKey string, params asset.CreateWalletParams) (*Wallet, error) {
+func CreateWatchOnlyWallet(ctx context.Context, extendedPubKey string, params asset.CreateWalletParams, useLocalSeed bool) (*Wallet, error) {
 	chainParams, err := ParseChainParams(params.Net)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing chain params: %w", err)
@@ -167,6 +184,14 @@ func CreateWatchOnlyWallet(ctx context.Context, extendedPubKey string, params as
 	// Ensure the data directory for the network exists.
 	if err := checkCreateDir(params.DataDir); err != nil {
 		return nil, fmt.Errorf("check new wallet data directory error: %w", err)
+	}
+
+	if useLocalSeed {
+		wd, err := asset.WalletData(params.DataDir)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get wallet data: %v", err)
+		}
+		extendedPubKey = wd.DefaultAccountXPub
 	}
 
 	xpub, err := hdkeychain.NewKeyFromString(extendedPubKey, chainParams)
