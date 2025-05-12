@@ -14,7 +14,6 @@ import (
 	"decred.org/dcrwallet/v4/wallet/udb"
 	"github.com/decred/dcrd/crypto/blake256"
 	"github.com/decred/dcrd/hdkeychain/v3"
-	"github.com/decred/libwallet/asset"
 )
 
 const (
@@ -32,7 +31,7 @@ func WalletExistsAt(dataDir string) (bool, error) {
 // provided, a new seed is generated and used. The seed is encrypted with the
 // provided passphrase and can be revealed for backup later by providing the
 // passphrase.
-func CreateWallet(ctx context.Context, params asset.CreateWalletParams, recovery *asset.RecoveryCfg) (*Wallet, error) {
+func CreateWallet(ctx context.Context, params CreateWalletParams, recovery *RecoveryCfg) (*Wallet, error) {
 	chainParams, err := ParseChainParams(params.Net)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing chain params: %w", err)
@@ -51,10 +50,9 @@ func CreateWallet(ctx context.Context, params asset.CreateWalletParams, recovery
 
 	var seed []byte
 	var birthday time.Time
-	var walletTraits asset.WalletTrait
 	if recovery != nil {
 		if recovery.UseLocalSeed {
-			wd, err := asset.WalletData(params.DataDir)
+			wd, err := RetreiveWalletData(params.DataDir)
 			if err != nil {
 				return nil, fmt.Errorf("unable to get wallet data: %v", err)
 			}
@@ -62,7 +60,7 @@ func CreateWallet(ctx context.Context, params asset.CreateWalletParams, recovery
 			if err != nil {
 				return nil, fmt.Errorf("unable to decode encrypted hex seed: %v", err)
 			}
-			seed, err = asset.DecryptData(encSeed, params.Pass)
+			seed, err = DecryptData(encSeed, params.Pass)
 			if err != nil {
 				return nil, fmt.Errorf("unable to decrypt wallet seed: %v", err)
 			}
@@ -70,7 +68,6 @@ func CreateWallet(ctx context.Context, params asset.CreateWalletParams, recovery
 		} else {
 			seed, birthday = recovery.Seed, recovery.Birthday
 		}
-		walletTraits = asset.WalletTraitRestored
 	} else {
 		seed, err = hdkeychain.GenerateSeed(entropyBytes)
 		if err != nil {
@@ -92,9 +89,9 @@ func CreateWallet(ctx context.Context, params asset.CreateWalletParams, recovery
 	defer acctKeySLIP0044Priv.Zero()
 	xpub := acctKeySLIP0044Priv.Neuter()
 
-	wb, err := asset.NewWalletBase(params.OpenWalletParams, seed, params.Pass, xpub.String(), birthday, walletTraits)
+	wd, err := SaveWalletData(seed, xpub.String(), birthday, params.DataDir, params.Pass)
 	if err != nil {
-		return nil, fmt.Errorf("NewWalletBase error: %v", err)
+		return nil, fmt.Errorf("SaveWalletData error: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
@@ -158,18 +155,19 @@ func CreateWallet(ctx context.Context, params asset.CreateWalletParams, recovery
 
 	bailOnWallet = false
 	return &Wallet{
-		WalletBase:  wb,
 		dir:         params.DataDir,
 		dbDriver:    params.DbDriver,
 		chainParams: chainParams,
 		log:         params.Logger,
+		metaData:    wd,
 		db:          db,
 		mainWallet:  w,
+		syncHelper:  &syncHelper{log: params.Logger},
 	}, nil
 }
 
 // CreateWatchOnlyWallet creates and opens a watchonly SPV wallet.
-func CreateWatchOnlyWallet(ctx context.Context, extendedPubKey string, params asset.CreateWalletParams, useLocalSeed bool) (*Wallet, error) {
+func CreateWatchOnlyWallet(ctx context.Context, extendedPubKey string, params CreateWalletParams, useLocalSeed bool) (*Wallet, error) {
 	chainParams, err := ParseChainParams(params.Net)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing chain params: %w", err)
@@ -187,7 +185,7 @@ func CreateWatchOnlyWallet(ctx context.Context, extendedPubKey string, params as
 	}
 
 	if useLocalSeed {
-		wd, err := asset.WalletData(params.DataDir)
+		wd, err := RetreiveWalletData(params.DataDir)
 		if err != nil {
 			return nil, fmt.Errorf("unable to get wallet data: %v", err)
 		}
@@ -199,9 +197,9 @@ func CreateWatchOnlyWallet(ctx context.Context, extendedPubKey string, params as
 		return nil, fmt.Errorf("unable to parse extended key: %w", err)
 	}
 
-	wb, err := asset.NewWalletBase(params.OpenWalletParams, nil, nil, xpub.String(), time.Time{}, asset.WalletTraitWatchOnly)
+	wd, err := SaveWalletData(nil, xpub.String(), time.Time{}, params.DataDir, nil) // password not required
 	if err != nil {
-		return nil, fmt.Errorf("NewWalletBase error: %v", err)
+		return nil, fmt.Errorf("SaveWalletData error: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
@@ -243,19 +241,20 @@ func CreateWatchOnlyWallet(ctx context.Context, extendedPubKey string, params as
 
 	bailOnWallet = false
 	return &Wallet{
-		WalletBase:  wb,
 		dir:         params.DataDir,
 		dbDriver:    params.DbDriver,
 		chainParams: chainParams,
 		log:         params.Logger,
+		metaData:    wd,
 		db:          db,
 		mainWallet:  w,
+		syncHelper:  &syncHelper{log: params.Logger},
 	}, nil
 }
 
 // LoadWallet loads a previously created SPV wallet. The wallet must be opened
 // via its OpenWallet method before it can be used.
-func LoadWallet(ctx context.Context, params asset.OpenWalletParams) (*Wallet, error) {
+func LoadWallet(ctx context.Context, params OpenWalletParams) (*Wallet, error) {
 	if exists, err := WalletExistsAt(params.DataDir); err != nil {
 		return nil, err
 	} else if !exists {
@@ -267,16 +266,17 @@ func LoadWallet(ctx context.Context, params asset.OpenWalletParams) (*Wallet, er
 		return nil, fmt.Errorf("error parsing chain params: %w", err)
 	}
 
-	wb, err := asset.OpenWalletBase(params)
+	wd, err := RetreiveWalletData(params.DataDir)
 	if err != nil {
-		return nil, fmt.Errorf("OpenWalletBase error: %v", err)
+		return nil, err
 	}
 
 	return &Wallet{
-		WalletBase:  wb,
 		dir:         params.DataDir,
 		dbDriver:    params.DbDriver,
 		chainParams: chainParams,
 		log:         params.Logger,
+		metaData:    wd,
+		syncHelper:  &syncHelper{log: params.Logger},
 	}, nil
 }
