@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"decred.org/dcrdex/client/mnemonic"
-	"github.com/decred/libwallet/asset"
 	"github.com/decred/libwallet/asset/dcr"
 	"github.com/decred/slog"
 )
@@ -47,14 +46,14 @@ func createWallet(cConfig *C.char) *C.char {
 		return errCResponse("wallet already exists with name: %q", name)
 	}
 
-	network, err := asset.NetFromString(cfg.Net)
+	network, err := dcr.NetFromString(cfg.Net)
 	if err != nil {
 		return errCResponse("%v", err)
 	}
 
 	logger := logBackend.SubLogger(name)
-	params := asset.CreateWalletParams{
-		OpenWalletParams: asset.OpenWalletParams{
+	params := dcr.CreateWalletParams{
+		OpenWalletParams: dcr.OpenWalletParams{
 			Net:      network,
 			DataDir:  cfg.DataDir,
 			DbDriver: "bdb", // use badgerdb for mobile!
@@ -63,19 +62,19 @@ func createWallet(cConfig *C.char) *C.char {
 		Pass: []byte(cfg.Pass),
 	}
 
-	var recoveryConfig *asset.RecoveryCfg
+	var recoveryConfig *dcr.RecoveryCfg
 	if cfg.Mnemonic != "" {
 		seed, birthday, err := mnemonic.DecodeMnemonic(cfg.Mnemonic)
 		if err != nil {
 			return errCResponse("unable to decode wallet mnemonic: %v", err)
 		}
-		recoveryConfig = &asset.RecoveryCfg{
+		recoveryConfig = &dcr.RecoveryCfg{
 			Seed:     seed,
 			Birthday: birthday,
 		}
 	}
 	if cfg.UseLocalSeed {
-		recoveryConfig = &asset.RecoveryCfg{
+		recoveryConfig = &dcr.RecoveryCfg{
 			UseLocalSeed: true,
 		}
 	}
@@ -117,14 +116,14 @@ func createWatchOnlyWallet(cConfig *C.char) *C.char {
 		return errCResponse("wallet already exists with name: %q", name)
 	}
 
-	network, err := asset.NetFromString(cfg.Net)
+	network, err := dcr.NetFromString(cfg.Net)
 	if err != nil {
 		return errCResponse("%v", err)
 	}
 
 	logger := logBackend.SubLogger(name)
-	params := asset.CreateWalletParams{
-		OpenWalletParams: asset.OpenWalletParams{
+	params := dcr.CreateWalletParams{
+		OpenWalletParams: dcr.OpenWalletParams{
 			Net:      network,
 			DataDir:  cfg.DataDir,
 			DbDriver: "bdb",
@@ -169,13 +168,13 @@ func loadWallet(cConfig *C.char) *C.char {
 		return successCResponse("wallet already loaded") // not an error, already loaded
 	}
 
-	network, err := asset.NetFromString(cfg.Net)
+	network, err := dcr.NetFromString(cfg.Net)
 	if err != nil {
 		return errCResponse("%v", err)
 	}
 
 	logger := logBackend.SubLogger(name)
-	params := asset.OpenWalletParams{
+	params := dcr.OpenWalletParams{
 		Net:      network,
 		DataDir:  cfg.DataDir,
 		DbDriver: "bdb", // use badgerdb for mobile!
