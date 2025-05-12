@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"decred.org/dcrdex/client/mnemonic"
-	"github.com/decred/libwallet/asset/dcr"
+	"github.com/decred/libwallet/dcr"
 	"github.com/decred/slog"
 )
 
