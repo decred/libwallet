@@ -276,10 +276,13 @@ func changePassphrase(cName, cOldPass, cNewPass *C.char) *C.char {
 		return errCResponse("wallet with name %q not loaded", goString(cName))
 	}
 
-	err := w.MainWallet().ChangePrivatePassphrase(w.ctx, []byte(goString(cOldPass)),
-		[]byte(goString(cNewPass)))
-	if err != nil {
+	oldPass, newPass := []byte(goString(cOldPass)), []byte(goString(cNewPass))
+	if err := w.MainWallet().ChangePrivatePassphrase(w.ctx, oldPass, newPass); err != nil {
 		return errCResponse("w.ChangePrivatePassphrase error: %v", err)
+	}
+
+	if err := w.ReEncryptSeed(oldPass, newPass); err != nil {
+		return errCResponse("w.ReEncryptSeed error: %v", err)
 	}
 
 	return successCResponse("passphrase changed")
