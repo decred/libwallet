@@ -6,16 +6,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 )
 
 const walletDataFileName = "walletdata.json"
 
 type walletData struct {
-	// seedMtx protects the EncryptedSeedHex field which may be modified when the
-	// wallet password is changed.
-	seedMtx            sync.Mutex
 	EncryptedSeedHex   string `json:"encryptedseedhex,omitempty"`
 	DefaultAccountXPub string `json:"defaultaccountxpub,omitempty"`
 	Birthday           int64  `json:"birthday,omitempty"`

@@ -8,7 +8,7 @@ import (
 
 // CreateWalletParams are the parameters for opening a wallet.
 type OpenWalletParams struct {
-	Net      Network
+	Net      string
 	DataDir  string
 	DbDriver string
 	Logger   slog.Logger

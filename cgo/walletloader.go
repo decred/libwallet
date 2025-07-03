@@ -46,15 +46,10 @@ func createWallet(cConfig *C.char) *C.char {
 		return errCResponse("wallet already exists with name: %q", name)
 	}
 
-	network, err := dcr.NetFromString(cfg.Net)
-	if err != nil {
-		return errCResponse("%v", err)
-	}
-
 	logger := logBackend.SubLogger(name)
 	params := dcr.CreateWalletParams{
 		OpenWalletParams: dcr.OpenWalletParams{
-			Net:      network,
+			Net:      cfg.Net,
 			DataDir:  cfg.DataDir,
 			DbDriver: "bdb", // use badgerdb for mobile!
 			Logger:   logger,
@@ -116,15 +111,10 @@ func createWatchOnlyWallet(cConfig *C.char) *C.char {
 		return errCResponse("wallet already exists with name: %q", name)
 	}
 
-	network, err := dcr.NetFromString(cfg.Net)
-	if err != nil {
-		return errCResponse("%v", err)
-	}
-
 	logger := logBackend.SubLogger(name)
 	params := dcr.CreateWalletParams{
 		OpenWalletParams: dcr.OpenWalletParams{
-			Net:      network,
+			Net:      cfg.Net,
 			DataDir:  cfg.DataDir,
 			DbDriver: "bdb",
 			Logger:   logger,
@@ -168,14 +158,9 @@ func loadWallet(cConfig *C.char) *C.char {
 		return successCResponse("wallet already loaded") // not an error, already loaded
 	}
 
-	network, err := dcr.NetFromString(cfg.Net)
-	if err != nil {
-		return errCResponse("%v", err)
-	}
-
 	logger := logBackend.SubLogger(name)
 	params := dcr.OpenWalletParams{
-		Net:      network,
+		Net:      cfg.Net,
 		DataDir:  cfg.DataDir,
 		DbDriver: "bdb", // use badgerdb for mobile!
 		Logger:   logger,
@@ -281,6 +266,10 @@ func changePassphrase(cName, cOldPass, cNewPass *C.char) *C.char {
 	}
 
 	if err := w.ReEncryptSeed(oldPass, newPass); err != nil {
+		// Undo the passphrase change, since the re-encrypting the seed failed.
+		if undoErr := w.MainWallet().ChangePrivatePassphrase(w.ctx, newPass, oldPass); undoErr != nil {
+			log.Errorf("error undoing passphrase change: %v", undoErr)
+		}
 		return errCResponse("w.ReEncryptSeed error: %v", err)
 	}
 

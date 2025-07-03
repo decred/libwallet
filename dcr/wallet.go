@@ -23,6 +23,9 @@ type Wallet struct {
 	chainParams *chaincfg.Params
 	log         slog.Logger
 
+	// seedMtx protects the metaData.EncryptedSeedHex field which may be
+	// modified when the wallet password is changed.
+	seedMtx  sync.Mutex
 	metaData *walletData
 	db       wallet.DB
 	*mainWallet
@@ -40,8 +43,8 @@ func (w *Wallet) MainWallet() *wallet.Wallet {
 // DecryptSeed decrypts the encrypted wallet seed using the provided passphrase
 // and returns the mnemonic.
 func (w *Wallet) DecryptSeed(passphrase []byte) (string, error) {
-	w.metaData.seedMtx.Lock()
-	defer w.metaData.seedMtx.Unlock()
+	w.seedMtx.Lock()
+	defer w.seedMtx.Unlock()
 
 	if w.metaData.EncryptedSeedHex == "" {
 		return "", fmt.Errorf("seed has been verified")
@@ -60,8 +63,8 @@ func (w *Wallet) DecryptSeed(passphrase []byte) (string, error) {
 }
 
 func (w *Wallet) ReEncryptSeed(oldPass, newPass []byte) error {
-	w.metaData.seedMtx.Lock()
-	defer w.metaData.seedMtx.Unlock()
+	w.seedMtx.Lock()
+	defer w.seedMtx.Unlock()
 
 	if w.metaData.EncryptedSeedHex == "" {
 		return nil
@@ -87,11 +90,6 @@ func (w *Wallet) ReEncryptSeed(oldPass, newPass []byte) error {
 	// above.
 	w.metaData.EncryptedSeedHex = updatedMetaData.EncryptedSeedHex
 	return nil
-}
-
-// WalletOpened returns true if the main wallet has been opened.
-func (w *Wallet) WalletOpened() bool {
-	return w.mainWallet != nil
 }
 
 // OpenWallet opens the wallet database and the main wallet.
@@ -132,7 +130,7 @@ func (w *Wallet) CloseWallet() error {
 
 	w.log.Trace("Closing wallet db")
 	if err := w.db.Close(); err != nil {
-		return fmt.Errorf("Close wallet db error: %w", err)
+		return fmt.Errorf("close wallet db error: %w", err)
 	}
 
 	w.log.Info("Wallet closed")
