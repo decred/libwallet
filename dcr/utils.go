@@ -4,25 +4,25 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"decred.org/dcrwallet/v4/wallet"
 	"decred.org/dcrwallet/v4/wallet/udb"
 	"github.com/decred/dcrd/chaincfg/v3"
-	"github.com/decred/libwallet/asset"
 )
 
-func ParseChainParams(network asset.Network) (*chaincfg.Params, error) {
+func ParseChainParams(network string) (*chaincfg.Params, error) {
 	// Get network settings. Zero value is mainnet, but unknown non-zero cfg.Net
 	// is an error.
-	switch network {
-	case asset.Simnet:
+	switch strings.ToLower(network) {
+	case "simnet":
 		return chaincfg.SimNetParams(), nil
-	case asset.Testnet:
+	case "testnet":
 		return chaincfg.TestNet3Params(), nil
-	case asset.Mainnet:
+	case "mainnet":
 		return chaincfg.MainNetParams(), nil
 	default:
-		return nil, fmt.Errorf("unknown network ID: %d", uint8(network))
+		return nil, fmt.Errorf("unknown network ID: %s", network)
 	}
 }
 

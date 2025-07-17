@@ -2,31 +2,37 @@ package dcr
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"path/filepath"
 	"sync"
+	"time"
 
+	"decred.org/dcrdex/client/mnemonic"
 	"decred.org/dcrwallet/v4/spv"
 	"decred.org/dcrwallet/v4/wallet"
 	"github.com/decred/dcrd/chaincfg/v3"
-	"github.com/decred/libwallet/asset"
 	"github.com/decred/slog"
 )
 
 type mainWallet = wallet.Wallet
 
 type Wallet struct {
-	*asset.WalletBase
 	dir         string
 	dbDriver    string
 	chainParams *chaincfg.Params
 	log         slog.Logger
 
-	db wallet.DB
+	// seedMtx protects the metaData.EncryptedSeedHex field which may be
+	// modified when the wallet password is changed.
+	seedMtx  sync.Mutex
+	metaData *walletData
+	db       wallet.DB
 	*mainWallet
 
 	syncerMtx sync.RWMutex
 	syncer    *spv.Syncer
+	*syncHelper
 }
 
 // MainWallet returns the main dcr wallet with the core wallet functionalities.
@@ -34,9 +40,56 @@ func (w *Wallet) MainWallet() *wallet.Wallet {
 	return w.mainWallet
 }
 
-// WalletOpened returns true if the main wallet has been opened.
-func (w *Wallet) WalletOpened() bool {
-	return w.mainWallet != nil
+// DecryptSeed decrypts the encrypted wallet seed using the provided passphrase
+// and returns the mnemonic.
+func (w *Wallet) DecryptSeed(passphrase []byte) (string, error) {
+	w.seedMtx.Lock()
+	defer w.seedMtx.Unlock()
+
+	if w.metaData.EncryptedSeedHex == "" {
+		return "", fmt.Errorf("seed has been verified")
+	}
+
+	encryptedSeed, err := hex.DecodeString(w.metaData.EncryptedSeedHex)
+	if err != nil {
+		return "", fmt.Errorf("unable to decode encrypted hex seed: %v", err)
+	}
+
+	seed, err := DecryptData(encryptedSeed, passphrase)
+	if err != nil {
+		return "", err
+	}
+	return mnemonic.GenerateMnemonic(seed, time.Unix(w.metaData.Birthday, 0))
+}
+
+func (w *Wallet) ReEncryptSeed(oldPass, newPass []byte) error {
+	w.seedMtx.Lock()
+	defer w.seedMtx.Unlock()
+
+	if w.metaData.EncryptedSeedHex == "" {
+		return nil
+	}
+
+	encryptedSeed, err := hex.DecodeString(w.metaData.EncryptedSeedHex)
+	if err != nil {
+		return fmt.Errorf("unable to decode encrypted hex seed: %v", err)
+	}
+
+	seed, err := DecryptData(encryptedSeed, oldPass)
+	if err != nil {
+		return err
+	}
+
+	birthday := time.Unix(w.metaData.Birthday, 0)
+	updatedMetaData, err := SaveWalletData(seed, w.metaData.DefaultAccountXPub, birthday, w.dir, newPass)
+	if err != nil {
+		return err
+	}
+
+	// Update only the EncryptedSeedHex field since we've held the seedMtx lock
+	// above.
+	w.metaData.EncryptedSeedHex = updatedMetaData.EncryptedSeedHex
+	return nil
 }
 
 // OpenWallet opens the wallet database and the main wallet.
@@ -77,7 +130,7 @@ func (w *Wallet) CloseWallet() error {
 
 	w.log.Trace("Closing wallet db")
 	if err := w.db.Close(); err != nil {
-		return fmt.Errorf("Close wallet db error: %w", err)
+		return fmt.Errorf("close wallet db error: %w", err)
 	}
 
 	w.log.Info("Wallet closed")

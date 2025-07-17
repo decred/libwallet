@@ -1,11 +1,16 @@
-package asset
+package dcr
 
 import (
 	"encoding/hex"
+	"errors"
 
 	"github.com/kevinburke/nacl"
 	"github.com/kevinburke/nacl/secretbox"
 	"golang.org/x/crypto/scrypt"
+)
+
+var (
+	ErrInvalidPassphrase = errors.New("invalid_passphrase")
 )
 
 // makeEncryptionKey loads a nacl.Key using a cryptographic key generated from
@@ -41,14 +46,4 @@ func DecryptData(data, passphrase []byte) ([]byte, error) {
 	}
 
 	return decryptedData, nil
-}
-
-// ReEncryptData decrypts the provided data using the oldPass and re-encrypts
-// the data using newPass.
-func ReEncryptData(data, oldPass, newPass []byte) ([]byte, error) {
-	data, err := DecryptData(data, oldPass)
-	if err != nil {
-		return nil, err
-	}
-	return EncryptData(data, newPass)
 }

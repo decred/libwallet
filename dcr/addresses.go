@@ -14,7 +14,7 @@ import (
 // returned if nUnused is zero. All used addresses are returned if nUsed is
 // zero. index is the first unused index.
 func (w *Wallet) DefaultAccountAddresses(ctx context.Context, nUsed, nUnused uint32) (used, unused []string, index uint32, err error) {
-	xpub, err := hdkeychain.NewKeyFromString(w.DefaultAccountXPub(), w.chainParams)
+	xpub, err := hdkeychain.NewKeyFromString(w.metaData.DefaultAccountXPub, w.chainParams)
 	if err != nil {
 		return nil, nil, 0, err
 	}

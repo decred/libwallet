@@ -13,8 +13,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/decred/libwallet/asset/dcr"
 	"github.com/decred/libwallet/assetlog"
+	"github.com/decred/libwallet/dcr"
 	"github.com/decred/slog"
 )
 

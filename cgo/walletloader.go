@@ -7,8 +7,7 @@ import (
 	"sync"
 
 	"decred.org/dcrdex/client/mnemonic"
-	"github.com/decred/libwallet/asset"
-	"github.com/decred/libwallet/asset/dcr"
+	"github.com/decred/libwallet/dcr"
 	"github.com/decred/slog"
 )
 
@@ -47,15 +46,10 @@ func createWallet(cConfig *C.char) *C.char {
 		return errCResponse("wallet already exists with name: %q", name)
 	}
 
-	network, err := asset.NetFromString(cfg.Net)
-	if err != nil {
-		return errCResponse("%v", err)
-	}
-
 	logger := logBackend.SubLogger(name)
-	params := asset.CreateWalletParams{
-		OpenWalletParams: asset.OpenWalletParams{
-			Net:      network,
+	params := dcr.CreateWalletParams{
+		OpenWalletParams: dcr.OpenWalletParams{
+			Net:      cfg.Net,
 			DataDir:  cfg.DataDir,
 			DbDriver: "bdb", // use badgerdb for mobile!
 			Logger:   logger,
@@ -63,19 +57,19 @@ func createWallet(cConfig *C.char) *C.char {
 		Pass: []byte(cfg.Pass),
 	}
 
-	var recoveryConfig *asset.RecoveryCfg
+	var recoveryConfig *dcr.RecoveryCfg
 	if cfg.Mnemonic != "" {
 		seed, birthday, err := mnemonic.DecodeMnemonic(cfg.Mnemonic)
 		if err != nil {
 			return errCResponse("unable to decode wallet mnemonic: %v", err)
 		}
-		recoveryConfig = &asset.RecoveryCfg{
+		recoveryConfig = &dcr.RecoveryCfg{
 			Seed:     seed,
 			Birthday: birthday,
 		}
 	}
 	if cfg.UseLocalSeed {
-		recoveryConfig = &asset.RecoveryCfg{
+		recoveryConfig = &dcr.RecoveryCfg{
 			UseLocalSeed: true,
 		}
 	}
@@ -117,15 +111,10 @@ func createWatchOnlyWallet(cConfig *C.char) *C.char {
 		return errCResponse("wallet already exists with name: %q", name)
 	}
 
-	network, err := asset.NetFromString(cfg.Net)
-	if err != nil {
-		return errCResponse("%v", err)
-	}
-
 	logger := logBackend.SubLogger(name)
-	params := asset.CreateWalletParams{
-		OpenWalletParams: asset.OpenWalletParams{
-			Net:      network,
+	params := dcr.CreateWalletParams{
+		OpenWalletParams: dcr.OpenWalletParams{
+			Net:      cfg.Net,
 			DataDir:  cfg.DataDir,
 			DbDriver: "bdb",
 			Logger:   logger,
@@ -169,14 +158,9 @@ func loadWallet(cConfig *C.char) *C.char {
 		return successCResponse("wallet already loaded") // not an error, already loaded
 	}
 
-	network, err := asset.NetFromString(cfg.Net)
-	if err != nil {
-		return errCResponse("%v", err)
-	}
-
 	logger := logBackend.SubLogger(name)
-	params := asset.OpenWalletParams{
-		Net:      network,
+	params := dcr.OpenWalletParams{
+		Net:      cfg.Net,
 		DataDir:  cfg.DataDir,
 		DbDriver: "bdb", // use badgerdb for mobile!
 		Logger:   logger,
@@ -282,6 +266,10 @@ func changePassphrase(cName, cOldPass, cNewPass *C.char) *C.char {
 	}
 
 	if err := w.ReEncryptSeed(oldPass, newPass); err != nil {
+		// Undo the passphrase change, since the re-encrypting the seed failed.
+		if undoErr := w.MainWallet().ChangePrivatePassphrase(w.ctx, newPass, oldPass); undoErr != nil {
+			log.Errorf("error undoing passphrase change: %v", undoErr)
+		}
 		return errCResponse("w.ReEncryptSeed error: %v", err)
 	}
 
