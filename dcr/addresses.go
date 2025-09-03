@@ -3,7 +3,11 @@ package dcr
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strconv"
+	"strings"
 
+	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/dcrutil/v4"
 	"github.com/decred/dcrd/hdkeychain/v3"
 	"github.com/decred/dcrd/txscript/v4/stdaddr"
@@ -80,4 +84,89 @@ func (w *Wallet) AccountPubkey(ctx context.Context, acct string) (string, error)
 	}
 
 	return xpub.String(), nil
+}
+
+const (
+	mainnetPrivKeyPrefix = "dprv"
+	mainnetPubKeyPrefix  = "dpub"
+
+	simnetPrivKeyPrefix = "sprv"
+	simnetPubKeyPrefix  = "spub"
+
+	testnetPrivKeyPrefix = "tprv"
+	testnetPubKeyPrefix  = "tpub"
+)
+
+// AddrFromExtendedKey returns an address of the chosen type derived from key at
+// the chosen path. The key can be a private or public key. They path must be in
+// the form n'/n/...
+func AddrFromExtendedKey(key, path, addrType string, useChildBIP32Std bool) (string, error) {
+	if len(key) < 4 {
+		return "", errors.New("key is too short")
+	}
+
+	var (
+		net *chaincfg.Params
+		err error
+	)
+
+	switch strings.ToLower(key[:4]) {
+	case mainnetPrivKeyPrefix, mainnetPubKeyPrefix:
+		net, err = ParseChainParams("mainnet")
+	case testnetPrivKeyPrefix, testnetPubKeyPrefix:
+		net, err = ParseChainParams("testnet")
+	case simnetPrivKeyPrefix, simnetPubKeyPrefix:
+		net, err = ParseChainParams("simnet")
+	default:
+		return "", errors.New("the key is not from a known network")
+	}
+	if err != nil {
+		return "", err
+	}
+
+	extKey, err := hdkeychain.NewKeyFromString(key, net)
+	if err != nil {
+		return "", err
+	}
+	defer extKey.Zero()
+
+	paths := strings.Split(path, "/")
+
+	for _, p := range paths {
+		if len(p) == 0 {
+			continue
+		}
+		nStr := p
+		isHardened := p[len(p)-1:] == "'"
+		if isHardened {
+			nStr = nStr[:len(p)-1]
+		}
+		n, err := strconv.ParseUint(nStr, 10, 32)
+		if err != nil {
+			return "", err
+		}
+		if isHardened {
+			n += hdkeychain.HardenedKeyStart
+		}
+		if useChildBIP32Std {
+			extKey, err = extKey.ChildBIP32Std(uint32(n))
+		} else {
+			extKey, err = extKey.Child(uint32(n))
+		}
+		if err != nil {
+			return "", err
+		}
+	}
+
+	switch strings.ToLower(addrType) {
+	case "p2pkh":
+		pkHash := stdaddr.Hash160(extKey.SerializedPubKey())
+		addr, err := stdaddr.NewAddressPubKeyHashEcdsaSecp256k1V0(pkHash, net)
+		if err != nil {
+			return "", err
+		}
+		return addr.String(), nil
+	default:
+		return "", fmt.Errorf("unknown address type %v", addrType)
+	}
 }

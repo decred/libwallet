@@ -9,6 +9,7 @@ import (
 	dcrwallet "decred.org/dcrwallet/v4/wallet"
 	"decred.org/dcrwallet/v4/wallet/udb"
 	"github.com/decred/dcrd/txscript/v4/stdaddr"
+	"github.com/decred/libwallet/dcr"
 )
 
 //export currentReceiveAddress
@@ -186,4 +187,18 @@ func defaultPubkey(cName *C.char) *C.char {
 	}
 
 	return successCResponse("%s", pubkey)
+}
+
+//export addrFromExtendedKey
+func addrFromExtendedKey(cAddrFromExtKeyJSON *C.char) *C.char {
+	fromExtJSON := goString(cAddrFromExtKeyJSON)
+	var fromExt AddrFromExtKey
+	if err := json.Unmarshal([]byte(fromExtJSON), &fromExt); err != nil {
+		return errCResponse("malformed create addr json: %v", err)
+	}
+	addr, err := dcr.AddrFromExtendedKey(fromExt.Key, fromExt.Path, fromExt.AddrType, fromExt.UseChildBIP32Std)
+	if err != nil {
+		return errCResponse("unable to create address: %v", err)
+	}
+	return successCResponse("%s", addr)
 }

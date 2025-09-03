@@ -171,3 +171,11 @@ type Config struct {
 	// Only needed during watching only creation.
 	PubKey string `json:"pubkey"`
 }
+
+type AddrFromExtKey struct {
+	Key  string `json:"key"`
+	Path string `json:"path"`
+	// Currently support types: P2PKH
+	AddrType         string `json:"addrtype"`
+	UseChildBIP32Std bool   `json:"usechildbip32std"`
+}
