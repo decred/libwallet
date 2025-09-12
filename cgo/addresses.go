@@ -202,3 +202,18 @@ func addrFromExtendedKey(cAddrFromExtKeyJSON *C.char) *C.char {
 	}
 	return successCResponse("%s", addr)
 }
+
+//export createExtendedKey
+func createExtendedKey(cCreateExtendedKeyJSON *C.char) *C.char {
+	createExtJSON := goString(cCreateExtendedKeyJSON)
+	var createExt CreateExtendedKey
+	if err := json.Unmarshal([]byte(createExtJSON), &createExt); err != nil {
+		return errCResponse("malformed ceate extended key json: %v", err)
+	}
+	extKey, err := dcr.CreateExtendedKey(createExt.Key, createExt.ParentKey, createExt.ChainCode,
+		createExt.Network, createExt.Depth, createExt.ChildN, createExt.IsPrivate)
+	if err != nil {
+		return errCResponse("unable to create key: %v", err)
+	}
+	return successCResponse("%s", extKey)
+}

@@ -179,3 +179,13 @@ type AddrFromExtKey struct {
 	AddrType         string `json:"addrtype"`
 	UseChildBIP32Std bool   `json:"usechildbip32std"`
 }
+
+type CreateExtendedKey struct {
+	Key       string `json:"key"`
+	ParentKey string `json:"parentkey"`
+	ChainCode string `json:"chaincode"`
+	Network   string `json:"network"`
+	Depth     uint8  `json:"depth"`
+	ChildN    uint32 `json:"childn"`
+	IsPrivate bool   `json:"isprivate"`
+}
