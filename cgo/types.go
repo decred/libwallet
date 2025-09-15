@@ -104,19 +104,20 @@ type Output struct {
 	Amount  int    `json:"amount"`
 }
 
-type CreateSignedTxReq struct {
+type CreateTxReq struct {
 	Outputs      []Output `json:"outputs"`
 	Inputs       []Input  `json:"inputs"`
 	IgnoreInputs []Input  `json:"ignoreinputs"`
 	FeeRate      int      `json:"feerate"`
 	SendAll      bool     `json:"sendall"`
 	Password     string   `json:"password"`
+	Sign         bool     `json:"sign"`
 }
 
-type CreateSignedTxRes struct {
-	SignedHex string `json:"signedhex"`
-	Txid      string `json:"txid"`
-	Fee       int    `json:"fee"`
+type CreateTxRes struct {
+	Hex  string `json:"hex"`
+	Txid string `json:"txid"`
+	Fee  int    `json:"fee"`
 }
 
 type ListUnspentRes struct {

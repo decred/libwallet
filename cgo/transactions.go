@@ -14,14 +14,14 @@ import (
 
 const defaultAccount = "default"
 
-//export createSignedTransaction
-func createSignedTransaction(cName, cCreateSignedTxJSONReq *C.char) *C.char {
+//export createTransaction
+func createTransaction(cName, cCreateTxJSONReq *C.char) *C.char {
 	w, exists := loadedWallet(cName)
 	if !exists {
 		return errCResponse("wallet with name %q does not exist", goString(cName))
 	}
-	signSendJSONReq := goString(cCreateSignedTxJSONReq)
-	var req CreateSignedTxReq
+	signSendJSONReq := goString(cCreateTxJSONReq)
+	var req CreateTxReq
 	if err := json.Unmarshal([]byte(signSendJSONReq), &req); err != nil {
 		return errCResponse("malformed sign send request: %v", err)
 	}
@@ -53,19 +53,21 @@ func createSignedTransaction(cName, cCreateSignedTxJSONReq *C.char) *C.char {
 		ignoreInputs[i] = o
 	}
 
-	if err := w.MainWallet().Unlock(w.ctx, []byte(req.Password), nil); err != nil {
-		return errCResponse("cannot unlock wallet: %v", err)
+	if req.Sign {
+		if err := w.MainWallet().Unlock(w.ctx, []byte(req.Password), nil); err != nil {
+			return errCResponse("cannot unlock wallet: %v", err)
+		}
+		defer w.MainWallet().Lock()
 	}
-	defer w.MainWallet().Lock()
 
-	txBytes, txhash, fee, err := w.CreateSignedTransaction(w.ctx, outputs, inputs, ignoreInputs, uint64(req.FeeRate), req.SendAll)
+	txBytes, txhash, fee, err := w.CreateTransaction(w.ctx, outputs, inputs, ignoreInputs, uint64(req.FeeRate), req.SendAll, req.Sign)
 	if err != nil {
 		return errCResponse("unable to sign send transaction: %v", err)
 	}
-	res := &CreateSignedTxRes{
-		SignedHex: hex.EncodeToString(txBytes),
-		Txid:      txhash.String(),
-		Fee:       int(fee),
+	res := &CreateTxRes{
+		Hex:  hex.EncodeToString(txBytes),
+		Txid: txhash.String(),
+		Fee:  int(fee),
 	}
 
 	b, err := json.Marshal(res)

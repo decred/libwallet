@@ -76,11 +76,11 @@ func (cs *changeSource) ScriptSize() int {
 	return len(cs.script)
 }
 
-// CreateSignedTransaction creates a signed transaction. The wallet must be
-// unlocked before calling. sendAll will send everything to one output. In that
+// CreateTransaction creates a transaction. The wallet must be unlocked before
+// calling if signing. sendAll will send everything to one output. In that
 // case the output's amount is ignored.
-func (w *Wallet) CreateSignedTransaction(ctx context.Context, outputs []*Output,
-	inputs, ignoreInputs []*Input, feeRate uint64, sendAll bool) (signedTx []byte,
+func (w *Wallet) CreateTransaction(ctx context.Context, outputs []*Output,
+	inputs, ignoreInputs []*Input, feeRate uint64, sendAll, sign bool) (signedTx []byte,
 	txid *chainhash.Hash, fee uint64, err error) {
 	if sendAll && len(outputs) > 1 {
 		return nil, nil, 0, errors.New("send all can only be used with one recepient")
@@ -236,6 +236,15 @@ func (w *Wallet) CreateSignedTransaction(ctx context.Context, outputs []*Output,
 	fee = uint64(atx.TotalInput)
 	for i := range atx.Tx.TxOut {
 		fee -= uint64(atx.Tx.TxOut[i].Value)
+	}
+
+	if !sign {
+		txHash := atx.Tx.TxHash()
+		b, err := atx.Tx.Bytes()
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		return b, &txHash, fee, nil
 	}
 
 	signedMsgTx, err := w.signRawTransaction(ctx, atx.Tx)
