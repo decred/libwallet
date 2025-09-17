@@ -477,3 +477,24 @@ func (w *Wallet) DecodeTx(hexStr string) (*dcrdtypes.TxRawDecodeResult, error) {
 		Vout:     voutList,
 	}, nil
 }
+
+// GetTxn returns the hex representation of the full transaction for the tx.
+// Transactions that do not concern the wallet will not be found.
+func (w *Wallet) GetTxn(ctx context.Context, txHashes []*chainhash.Hash) (txHexes []string, err error) {
+	txn, _, err := w.mainWallet.GetTransactionsByHashes(ctx, txHashes)
+	if err != nil {
+		return nil, err
+	}
+	if len(txn) != len(txHashes) {
+		return nil, errors.New("could not get all txn")
+	}
+	txHexes = make([]string, len(txn))
+	for i, tx := range txn {
+		txB, err := tx.Bytes()
+		if err != nil {
+			return nil, err
+		}
+		txHexes[i] = hex.EncodeToString(txB)
+	}
+	return txHexes, nil
+}

@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	dcrwallet "decred.org/dcrwallet/v4/wallet"
+	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/txscript/v4/stdaddr"
 	"github.com/decred/libwallet/dcr"
 )
@@ -230,6 +231,35 @@ func decodeTx(cName, cTxHex *C.char) *C.char {
 	b, err := json.Marshal(decoded)
 	if err != nil {
 		return errCResponse("unable to marshal decoded tx: %v", err)
+	}
+	return successCResponse("%s", b)
+}
+
+//export getTxn
+func getTxn(cName, cHashes *C.char) *C.char {
+	w, exists := loadedWallet(cName)
+	if !exists {
+		return errCResponse("wallet with name %q does not exist", goString(cName))
+	}
+	var txIDs []string
+	if err := json.Unmarshal([]byte(goString(cHashes)), &txIDs); err != nil {
+		return errCResponse("unable to unmarshal hashes: %v", err)
+	}
+	txHashes := make([]*chainhash.Hash, len(txIDs))
+	for i, txID := range txIDs {
+		txHash, err := chainhash.NewHashFromStr(txID)
+		if err != nil {
+			return errCResponse("unable to create tx hash: %v", err)
+		}
+		txHashes[i] = txHash
+	}
+	hexes, err := w.GetTxn(w.ctx, txHashes)
+	if err != nil {
+		return errCResponse("unable to get txn: %v", err)
+	}
+	b, err := json.Marshal(hexes)
+	if err != nil {
+		return errCResponse("unable to marshal txn: %v", err)
 	}
 	return successCResponse("%s", b)
 }
