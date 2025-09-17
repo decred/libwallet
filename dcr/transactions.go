@@ -1,6 +1,7 @@
 package dcr
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -12,14 +13,25 @@ import (
 	"decred.org/dcrwallet/v4/wallet"
 	"decred.org/dcrwallet/v4/wallet/txauthor"
 	"decred.org/dcrwallet/v4/wallet/txsizes"
+	"github.com/decred/dcrd/blockchain/stake/v5"
+	"github.com/decred/dcrd/blockchain/standalone/v2"
 	"github.com/decred/dcrd/chaincfg/chainhash"
+	"github.com/decred/dcrd/chaincfg/v3"
+	"github.com/decred/dcrd/dcrjson/v4"
 	"github.com/decred/dcrd/dcrutil/v4"
+	dcrdtypes "github.com/decred/dcrd/rpc/jsonrpc/types/v4"
 	"github.com/decred/dcrd/txscript/v4"
 	"github.com/decred/dcrd/txscript/v4/stdaddr"
+	"github.com/decred/dcrd/txscript/v4/stdscript"
 	"github.com/decred/dcrd/wire"
 )
 
-const defaultAccount = "default"
+const (
+	defaultAccount = "default"
+	// sstxCommitmentString is the string to insert when a verbose
+	// transaction output's pkscript type is a ticket commitment.
+	sstxCommitmentString = "sstxcommitment"
+)
 
 // newTxOut returns a new transaction output with the given parameters.
 func newTxOut(amount int64, pkScriptVer uint16, pkScript []byte) *wire.TxOut {
@@ -274,4 +286,194 @@ func (w *Wallet) SendRawTransaction(ctx context.Context, txHex string) (*chainha
 	w.syncerMtx.RLock()
 	defer w.syncerMtx.RUnlock()
 	return w.mainWallet.PublishTransaction(ctx, msgTx, w.syncer)
+}
+
+// createVinList returns a slice of JSON objects for the inputs of the passed
+// transaction.
+func createVinList(mtx *wire.MsgTx, isTreasuryEnabled bool) []dcrdtypes.Vin {
+	// Treasurybase transactions only have a single txin by definition.
+	//
+	// NOTE: This check MUST come before the coinbase check because a
+	// treasurybase will be identified as a coinbase as well.
+	vinList := make([]dcrdtypes.Vin, len(mtx.TxIn))
+	if isTreasuryEnabled && standalone.IsTreasuryBase(mtx) {
+		txIn := mtx.TxIn[0]
+		vinEntry := &vinList[0]
+		vinEntry.Treasurybase = true
+		vinEntry.Sequence = txIn.Sequence
+		vinEntry.AmountIn = dcrutil.Amount(txIn.ValueIn).ToCoin()
+		vinEntry.BlockHeight = txIn.BlockHeight
+		vinEntry.BlockIndex = txIn.BlockIndex
+		return vinList
+	}
+
+	// Coinbase transactions only have a single txin by definition.
+	if standalone.IsCoinBaseTx(mtx, isTreasuryEnabled) {
+		txIn := mtx.TxIn[0]
+		vinEntry := &vinList[0]
+		vinEntry.Coinbase = hex.EncodeToString(txIn.SignatureScript)
+		vinEntry.Sequence = txIn.Sequence
+		vinEntry.AmountIn = dcrutil.Amount(txIn.ValueIn).ToCoin()
+		vinEntry.BlockHeight = txIn.BlockHeight
+		vinEntry.BlockIndex = txIn.BlockIndex
+		return vinList
+	}
+
+	// Treasury spend transactions only have a single txin by definition.
+	if isTreasuryEnabled && stake.IsTSpend(mtx) {
+		txIn := mtx.TxIn[0]
+		vinEntry := &vinList[0]
+		vinEntry.TreasurySpend = hex.EncodeToString(txIn.SignatureScript)
+		vinEntry.Sequence = txIn.Sequence
+		vinEntry.AmountIn = dcrutil.Amount(txIn.ValueIn).ToCoin()
+		vinEntry.BlockHeight = txIn.BlockHeight
+		vinEntry.BlockIndex = txIn.BlockIndex
+		return vinList
+	}
+
+	// Stakebase transactions (votes) have two inputs: a null stake base
+	// followed by an input consuming a ticket's stakesubmission.
+	isSSGen := stake.IsSSGen(mtx)
+
+	for i, txIn := range mtx.TxIn {
+		// Handle only the null input of a stakebase differently.
+		if isSSGen && i == 0 {
+			vinEntry := &vinList[0]
+			vinEntry.Stakebase = hex.EncodeToString(txIn.SignatureScript)
+			vinEntry.Sequence = txIn.Sequence
+			vinEntry.AmountIn = dcrutil.Amount(txIn.ValueIn).ToCoin()
+			vinEntry.BlockHeight = txIn.BlockHeight
+			vinEntry.BlockIndex = txIn.BlockIndex
+			continue
+		}
+
+		// The disassembled string will contain [error] inline
+		// if the script doesn't fully parse, so ignore the
+		// error here.
+		disbuf, _ := txscript.DisasmString(txIn.SignatureScript)
+
+		vinEntry := &vinList[i]
+		vinEntry.Txid = txIn.PreviousOutPoint.Hash.String()
+		vinEntry.Vout = txIn.PreviousOutPoint.Index
+		vinEntry.Tree = txIn.PreviousOutPoint.Tree
+		vinEntry.Sequence = txIn.Sequence
+		vinEntry.AmountIn = dcrutil.Amount(txIn.ValueIn).ToCoin()
+		vinEntry.BlockHeight = txIn.BlockHeight
+		vinEntry.BlockIndex = txIn.BlockIndex
+		vinEntry.ScriptSig = &dcrdtypes.ScriptSig{
+			Asm: disbuf,
+			Hex: hex.EncodeToString(txIn.SignatureScript),
+		}
+	}
+
+	return vinList
+}
+
+// createVoutList returns a slice of JSON objects for the outputs of the passed
+// transaction.
+func createVoutList(mtx *wire.MsgTx, chainParams *chaincfg.Params) ([]dcrdtypes.Vout, error) {
+
+	txType := stake.DetermineTxType(mtx)
+	voutList := make([]dcrdtypes.Vout, 0, len(mtx.TxOut))
+	for i, v := range mtx.TxOut {
+		// The disassembled string will contain [error] inline if the
+		// script doesn't fully parse, so ignore the error here.
+		disbuf, _ := txscript.DisasmString(v.PkScript)
+
+		// Attempt to extract addresses from the public key script.  In
+		// the case of stake submission transactions, the odd outputs
+		// contain a commitment address, so detect that case
+		// accordingly.
+		var addrs []stdaddr.Address
+		var scriptType string
+		var reqSigs uint16
+		var commitAmt *dcrutil.Amount
+		if txType == stake.TxTypeSStx && (i%2 != 0) {
+			scriptType = sstxCommitmentString
+			addr, err := stake.AddrFromSStxPkScrCommitment(v.PkScript,
+				chainParams)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode ticket "+
+					"commitment addr output for tx hash "+
+					"%v, output idx %v", mtx.TxHash(), i)
+			} else {
+				addrs = []stdaddr.Address{addr}
+			}
+			amt, err := stake.AmountFromSStxPkScrCommitment(v.PkScript)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode ticket "+
+					"commitment amt output for tx hash %v"+
+					", output idx %v", mtx.TxHash(), i)
+			} else {
+				commitAmt = &amt
+			}
+		} else {
+			// Attempt to extract known addresses associated with the script.
+			var st stdscript.ScriptType
+			st, addrs = stdscript.ExtractAddrs(v.Version, v.PkScript, chainParams)
+			scriptType = st.String()
+
+			// Determine the number of required signatures for known standard
+			// dcrdtypes.
+			reqSigs = stdscript.DetermineRequiredSigs(v.Version, v.PkScript)
+		}
+
+		encodedAddrs := make([]string, len(addrs))
+		for j, addr := range addrs {
+			encodedAddr := addr.String()
+			encodedAddrs[j] = encodedAddr
+		}
+
+		var vout dcrdtypes.Vout
+		voutSPK := &vout.ScriptPubKey
+		vout.N = uint32(i)
+		vout.Value = dcrutil.Amount(v.Value).ToCoin()
+		vout.Version = v.Version
+		voutSPK.Addresses = encodedAddrs
+		voutSPK.Asm = disbuf
+		voutSPK.Hex = hex.EncodeToString(v.PkScript)
+		voutSPK.Type = scriptType
+		voutSPK.ReqSigs = int32(reqSigs)
+		if commitAmt != nil {
+			voutSPK.CommitAmt = dcrjson.Float64(commitAmt.ToCoin())
+		}
+		voutSPK.Version = v.Version
+
+		voutList = append(voutList, vout)
+	}
+
+	return voutList, nil
+}
+
+// DecodeTx decodes a transaction from its hex.
+func (w *Wallet) DecodeTx(hexStr string) (*dcrdtypes.TxRawDecodeResult, error) {
+	if len(hexStr)%2 != 0 {
+		hexStr = "0" + hexStr
+	}
+	serializedTx, err := hex.DecodeString(hexStr)
+	if err != nil {
+		return nil, err
+	}
+	var mtx wire.MsgTx
+	err = mtx.Deserialize(bytes.NewReader(serializedTx))
+	if err != nil {
+		return nil, err
+	}
+
+	voutList, err := createVoutList(&mtx, w.chainParams)
+	if err != nil {
+		return nil, err
+	}
+
+	isTreasuryEnabled := true
+
+	// Create and return the result.
+	return &dcrdtypes.TxRawDecodeResult{
+		Txid:     mtx.TxHash().String(),
+		Version:  int32(mtx.Version),
+		Locktime: mtx.LockTime,
+		Expiry:   mtx.Expiry,
+		Vin:      createVinList(&mtx, isTreasuryEnabled),
+		Vout:     voutList,
+	}, nil
 }

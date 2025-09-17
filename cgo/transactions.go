@@ -216,3 +216,20 @@ func bestBlock(cName *C.char) *C.char {
 	}
 	return successCResponse("%s", b)
 }
+
+//export decodeTx
+func decodeTx(cName, cTxHex *C.char) *C.char {
+	w, exists := loadedWallet(cName)
+	if !exists {
+		return errCResponse("wallet with name %q does not exist", goString(cName))
+	}
+	decoded, err := w.DecodeTx(goString(cTxHex))
+	if err != nil {
+		return errCResponse("unable to decode tx: %v", err)
+	}
+	b, err := json.Marshal(decoded)
+	if err != nil {
+		return errCResponse("unable to marshal decoded tx: %v", err)
+	}
+	return successCResponse("%s", b)
+}
