@@ -9,6 +9,9 @@ import (
 	"strconv"
 	"strings"
 
+	walleterrors "decred.org/dcrwallet/v4/errors"
+	wallettypes "decred.org/dcrwallet/v4/rpc/jsonrpc/types"
+	"decred.org/dcrwallet/v4/wallet"
 	"github.com/decred/base58"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/crypto/blake256"
@@ -17,6 +20,7 @@ import (
 	"github.com/decred/dcrd/dcrutil/v4"
 	"github.com/decred/dcrd/hdkeychain/v3"
 	"github.com/decred/dcrd/txscript/v4/stdaddr"
+	"github.com/decred/dcrd/txscript/v4/stdscript"
 )
 
 // DefaultAccountAddresses returns addresses for the default account. Returns
@@ -254,4 +258,107 @@ func CreateExtendedKey(keyHex, parentKeyHex, chainCodeHex, network string, depth
 	copy(extKeyB[4+1+4+4+32:], keyB[:])
 	checkSum := doubleBlake256Cksum(extKeyB[:])
 	return base58.Encode(append(extKeyB[:], checkSum...)), nil
+}
+
+func decodeAddress(s string, params *chaincfg.Params) (stdaddr.Address, error) {
+	// Secp256k1 pubkey as a string, handle differently.
+	if len(s) == 66 || len(s) == 130 {
+		pubKeyBytes, err := hex.DecodeString(s)
+		if err != nil {
+			return nil, err
+		}
+		pubKeyAddr, err := stdaddr.NewAddressPubKeyEcdsaSecp256k1V0Raw(
+			pubKeyBytes, params)
+		if err != nil {
+			return nil, err
+		}
+
+		return pubKeyAddr, nil
+	}
+
+	addr, err := stdaddr.DecodeAddress(s, params)
+	if err != nil {
+		return nil, fmt.Errorf("invalid address %q: decode failed: %#q", s, err)
+	}
+	return addr, nil
+}
+
+// ValidateAddr validates an address.
+func (w *Wallet) ValidateAddr(ctx context.Context, addrStr string) (*wallettypes.ValidateAddressResult, error) {
+	result := &wallettypes.ValidateAddressResult{}
+	addr, err := decodeAddress(addrStr, w.chainParams)
+	if err != nil {
+		result.Script = stdscript.STNonStandard.String()
+		// Use result zero value (IsValid=false).
+		return result, nil
+	}
+
+	result.Address = addr.String()
+	result.IsValid = true
+	ver, scr := addr.PaymentScript()
+	class, _ := stdscript.ExtractAddrs(ver, scr, w.ChainParams())
+	result.Script = class.String()
+	if pker, ok := addr.(stdaddr.SerializedPubKeyer); ok {
+		result.PubKey = hex.EncodeToString(pker.SerializedPubKey())
+		result.PubKeyAddr = addr.String()
+	}
+	if class == stdscript.STScriptHash {
+		result.IsScript = true
+	}
+	if _, ok := addr.(stdaddr.Hash160er); ok {
+		result.IsCompressed = true
+	}
+
+	ka, err := w.KnownAddress(ctx, addr)
+	if err != nil {
+		if errors.Is(err, walleterrors.NotExist) {
+			// No additional information available about the address.
+			return result, nil
+		}
+		return nil, err
+	}
+
+	// The address lookup was successful which means there is further
+	// information about it available and it is "mine".
+	result.IsMine = true
+	result.Account = ka.AccountName()
+
+	switch ka := ka.(type) {
+	case wallet.PubKeyHashAddress:
+		pubKey := ka.PubKey()
+		result.PubKey = hex.EncodeToString(pubKey)
+		pubKeyAddr, err := stdaddr.NewAddressPubKeyEcdsaSecp256k1V0Raw(pubKey, w.ChainParams())
+		if err != nil {
+			return nil, err
+		}
+		result.PubKeyAddr = pubKeyAddr.String()
+	case wallet.P2SHAddress:
+		version, script := ka.RedeemScript()
+		result.Hex = hex.EncodeToString(script)
+
+		class, addrs := stdscript.ExtractAddrs(version, script, w.ChainParams())
+		addrStrings := make([]string, len(addrs))
+		for i, a := range addrs {
+			addrStrings[i] = a.String()
+		}
+		result.Addresses = addrStrings
+		result.Script = class.String()
+
+		// Multi-signature scripts also provide the number of required
+		// signatures.
+		if class == stdscript.STMultiSig {
+			result.SigsRequired = int32(stdscript.DetermineRequiredSigs(version, script))
+		}
+	}
+
+	if ka, ok := ka.(wallet.BIP0044Address); ok {
+		acct, branch, child := ka.Path()
+		if ka.AccountKind() != wallet.AccountKindImportedXpub {
+			result.AccountN = &acct
+		}
+		result.Branch = &branch
+		result.Index = &child
+	}
+
+	return result, nil
 }

@@ -217,3 +217,20 @@ func createExtendedKey(cCreateExtendedKeyJSON *C.char) *C.char {
 	}
 	return successCResponse("%s", extKey)
 }
+
+//export validateAddr
+func validateAddr(cName, cAddr *C.char) *C.char {
+	w, exists := loadedWallet(cName)
+	if !exists {
+		return errCResponse("wallet with name %q does not exist", goString(cName))
+	}
+	validated, err := w.ValidateAddr(w.ctx, goString(cAddr))
+	if err != nil {
+		return errCResponse("unable to validate address: %v", err)
+	}
+	b, err := json.Marshal(validated)
+	if err != nil {
+		return errCResponse("unable to marshal validate address: %v", err)
+	}
+	return successCResponse("%s", b)
+}
