@@ -263,3 +263,20 @@ func getTxn(cName, cHashes *C.char) *C.char {
 	}
 	return successCResponse("%s", b)
 }
+
+//export addSigs
+func addSigs(cName, cTxHex, cSigScripts *C.char) *C.char {
+	w, exists := loadedWallet(cName)
+	if !exists {
+		return errCResponse("wallet with name %q does not exist", goString(cName))
+	}
+	var sigScripts []string
+	if err := json.Unmarshal([]byte(goString(cSigScripts)), &sigScripts); err != nil {
+		return errCResponse("unable to unmarshal sig scripts: %v", err)
+	}
+	signedHex, err := w.AddSigs(goString(cTxHex), sigScripts)
+	if err != nil {
+		return errCResponse("unable sign tx: %v", err)
+	}
+	return successCResponse("%s", signedHex)
+}

@@ -498,3 +498,39 @@ func (w *Wallet) GetTxn(ctx context.Context, txHashes []*chainhash.Hash) (txHexe
 	}
 	return txHexes, nil
 }
+
+// AddSigs adds signatures to a tx. The number of signature scripts should
+// match the number of tx inputs. Blank strings may be used to skip inputs.
+func (w *Wallet) AddSigs(hexStr string, sigScripts []string) (signedTxHex string, err error) {
+	if len(hexStr)%2 != 0 {
+		hexStr = "0" + hexStr
+	}
+	serializedTx, err := hex.DecodeString(hexStr)
+	if err != nil {
+		return "", err
+	}
+	var mtx wire.MsgTx
+	err = mtx.Deserialize(bytes.NewReader(serializedTx))
+	if err != nil {
+		return "", err
+	}
+	if len(mtx.TxIn) != len(sigScripts) {
+		return "", errors.New("number of inputs and signatures differ")
+	}
+	for i := 0; i < len(mtx.TxIn); i++ {
+		if len(sigScripts[i]) == 0 {
+			continue
+		}
+		sig, err := hex.DecodeString(sigScripts[i])
+		if err != nil {
+			return "", err
+		}
+		mtx.TxIn[i].SignatureScript = sig
+	}
+	mtx.SerType = wire.TxSerializeFull
+	b, err := mtx.Bytes()
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
