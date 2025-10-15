@@ -9,6 +9,7 @@ import (
 	dcrwallet "decred.org/dcrwallet/v4/wallet"
 	"decred.org/dcrwallet/v4/wallet/udb"
 	"github.com/decred/dcrd/txscript/v4/stdaddr"
+	"github.com/decred/libwallet/dcr"
 )
 
 //export currentReceiveAddress
@@ -186,4 +187,50 @@ func defaultPubkey(cName *C.char) *C.char {
 	}
 
 	return successCResponse("%s", pubkey)
+}
+
+//export addrFromExtendedKey
+func addrFromExtendedKey(cAddrFromExtKeyJSON *C.char) *C.char {
+	fromExtJSON := goString(cAddrFromExtKeyJSON)
+	var fromExt AddrFromExtKey
+	if err := json.Unmarshal([]byte(fromExtJSON), &fromExt); err != nil {
+		return errCResponse("malformed create addr json: %v", err)
+	}
+	addr, err := dcr.AddrFromExtendedKey(fromExt.Key, fromExt.Path, fromExt.AddrType, fromExt.UseChildBIP32Std)
+	if err != nil {
+		return errCResponse("unable to create address: %v", err)
+	}
+	return successCResponse("%s", addr)
+}
+
+//export createExtendedKey
+func createExtendedKey(cCreateExtendedKeyJSON *C.char) *C.char {
+	createExtJSON := goString(cCreateExtendedKeyJSON)
+	var createExt CreateExtendedKey
+	if err := json.Unmarshal([]byte(createExtJSON), &createExt); err != nil {
+		return errCResponse("malformed ceate extended key json: %v", err)
+	}
+	extKey, err := dcr.CreateExtendedKey(createExt.Key, createExt.ParentKey, createExt.ChainCode,
+		createExt.Network, createExt.Depth, createExt.ChildN, createExt.IsPrivate)
+	if err != nil {
+		return errCResponse("unable to create key: %v", err)
+	}
+	return successCResponse("%s", extKey)
+}
+
+//export validateAddr
+func validateAddr(cName, cAddr *C.char) *C.char {
+	w, exists := loadedWallet(cName)
+	if !exists {
+		return errCResponse("wallet with name %q does not exist", goString(cName))
+	}
+	validated, err := w.ValidateAddr(w.ctx, goString(cAddr))
+	if err != nil {
+		return errCResponse("unable to validate address: %v", err)
+	}
+	b, err := json.Marshal(validated)
+	if err != nil {
+		return errCResponse("unable to marshal validate address: %v", err)
+	}
+	return successCResponse("%s", b)
 }

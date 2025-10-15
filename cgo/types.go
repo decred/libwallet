@@ -104,19 +104,20 @@ type Output struct {
 	Amount  int    `json:"amount"`
 }
 
-type CreateSignedTxReq struct {
+type CreateTxReq struct {
 	Outputs      []Output `json:"outputs"`
 	Inputs       []Input  `json:"inputs"`
 	IgnoreInputs []Input  `json:"ignoreinputs"`
 	FeeRate      int      `json:"feerate"`
 	SendAll      bool     `json:"sendall"`
 	Password     string   `json:"password"`
+	Sign         bool     `json:"sign"`
 }
 
-type CreateSignedTxRes struct {
-	SignedHex string `json:"signedhex"`
-	Txid      string `json:"txid"`
-	Fee       int    `json:"fee"`
+type CreateTxRes struct {
+	Hex  string `json:"hex"`
+	Txid string `json:"txid"`
+	Fee  int    `json:"fee"`
 }
 
 type ListUnspentRes struct {
@@ -170,4 +171,22 @@ type Config struct {
 	UseLocalSeed bool `json:"uselocalseed"`
 	// Only needed during watching only creation.
 	PubKey string `json:"pubkey"`
+}
+
+type AddrFromExtKey struct {
+	Key  string `json:"key"`
+	Path string `json:"path"`
+	// Currently support types: P2PKH
+	AddrType         string `json:"addrtype"`
+	UseChildBIP32Std bool   `json:"usechildbip32std"`
+}
+
+type CreateExtendedKey struct {
+	Key       string `json:"key"`
+	ParentKey string `json:"parentkey"`
+	ChainCode string `json:"chaincode"`
+	Network   string `json:"network"`
+	Depth     uint8  `json:"depth"`
+	ChildN    uint32 `json:"childn"`
+	IsPrivate bool   `json:"isprivate"`
 }
