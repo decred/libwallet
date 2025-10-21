@@ -3,15 +3,17 @@ package dcr
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sync"
 	"time"
 
-	"decred.org/dcrdex/client/mnemonic"
+	dexmnemonic "decred.org/dcrdex/client/mnemonic"
 	"decred.org/dcrwallet/v4/spv"
 	"decred.org/dcrwallet/v4/wallet"
 	"github.com/decred/dcrd/chaincfg/v3"
+	"github.com/decred/libwallet/mnemonic"
 	"github.com/decred/slog"
 )
 
@@ -46,10 +48,6 @@ func (w *Wallet) DecryptSeed(passphrase []byte) (string, error) {
 	w.seedMtx.Lock()
 	defer w.seedMtx.Unlock()
 
-	if w.metaData.EncryptedSeedHex == "" {
-		return "", fmt.Errorf("seed has been verified")
-	}
-
 	encryptedSeed, err := hex.DecodeString(w.metaData.EncryptedSeedHex)
 	if err != nil {
 		return "", fmt.Errorf("unable to decode encrypted hex seed: %v", err)
@@ -59,15 +57,24 @@ func (w *Wallet) DecryptSeed(passphrase []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return mnemonic.GenerateMnemonic(seed, time.Unix(w.metaData.Birthday, 0))
+
+	switch w.metaData.SeedType {
+	case STFifteenWords:
+		return dexmnemonic.GenerateMnemonic(seed, time.Unix(w.metaData.Birthday, 0))
+	case STTwelveWords, STTwentyFourWords:
+		return mnemonic.GenerateMnemonic(seed)
+	default:
+		return "", fmt.Errorf("invalid saved seed length %d", len(seed))
+	}
 }
 
+// ReEncryptSeed reads the seed with the old pass and encrypts it with the new pass.
 func (w *Wallet) ReEncryptSeed(oldPass, newPass []byte) error {
 	w.seedMtx.Lock()
 	defer w.seedMtx.Unlock()
 
 	if w.metaData.EncryptedSeedHex == "" {
-		return nil
+		return errors.New("encrypted seed does not exist")
 	}
 
 	encryptedSeed, err := hex.DecodeString(w.metaData.EncryptedSeedHex)
@@ -81,7 +88,7 @@ func (w *Wallet) ReEncryptSeed(oldPass, newPass []byte) error {
 	}
 
 	birthday := time.Unix(w.metaData.Birthday, 0)
-	updatedMetaData, err := SaveWalletData(seed, w.metaData.DefaultAccountXPub, birthday, w.dir, newPass)
+	updatedMetaData, err := saveWalletData(seed, w.metaData.DefaultAccountXPub, birthday, w.dir, newPass, w.metaData.SeedType)
 	if err != nil {
 		return err
 	}

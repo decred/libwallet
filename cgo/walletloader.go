@@ -4,10 +4,13 @@ import "C"
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"sync"
+	"time"
 
-	"decred.org/dcrdex/client/mnemonic"
+	dexmnemonic "decred.org/dcrdex/client/mnemonic"
 	"github.com/decred/libwallet/dcr"
+	"github.com/decred/libwallet/mnemonic"
 	"github.com/decred/slog"
 )
 
@@ -59,12 +62,34 @@ func createWallet(cConfig *C.char) *C.char {
 
 	var recoveryConfig *dcr.RecoveryCfg
 	if cfg.Mnemonic != "" {
-		seed, birthday, err := mnemonic.DecodeMnemonic(cfg.Mnemonic)
+		var (
+			seed     []byte
+			birthday time.Time
+			seedType dcr.SeedType
+			err      error
+		)
+		nWords := len(strings.Fields(cfg.Mnemonic))
+		switch nWords {
+		case 15:
+			seed, birthday, err = dexmnemonic.DecodeMnemonic(cfg.Mnemonic)
+			seedType = dcr.STFifteenWords
+		case 12:
+			seed, err = mnemonic.DecodeMnemonic(cfg.Mnemonic)
+			birthday = time.Unix(cfg.Birthday, 0)
+			seedType = dcr.STTwelveWords
+		case 24:
+			seed, err = mnemonic.DecodeMnemonic(cfg.Mnemonic)
+			birthday = time.Unix(cfg.Birthday, 0)
+			seedType = dcr.STTwentyFourWords
+		default:
+			return errCResponse("unknown mnemonic format. expected 12, 15, or 24 words, got %d", nWords)
+		}
 		if err != nil {
 			return errCResponse("unable to decode wallet mnemonic: %v", err)
 		}
 		recoveryConfig = &dcr.RecoveryCfg{
 			Seed:     seed,
+			SeedType: seedType,
 			Birthday: birthday,
 		}
 	}

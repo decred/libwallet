@@ -163,6 +163,7 @@ type Config struct {
 	Net                string `json:"net"`
 	DataDir            string `json:"datadir"`
 	// Only needed during creation.
+	Birthday int64  `json:"birthday"`
 	Pass     string `json:"pass"`
 	Mnemonic string `json:"mnemonic"`
 	// If the wallet existed before but the db was deleted to reduce
