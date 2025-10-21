@@ -1,19 +1,12 @@
+version: "2"
 run:
-  deadline: 10m
-
-output:
-  formats: colored-line-number
-
+  timeout: 10m
 linters:
-  disable-all: true
+  default: none
   enable:
     - asciicheck
     - bidichk
     - durationcheck
-    - copyloopvar
-    - gofmt
-    - goimports
-    - gosimple
     - govet
     - grouper
     - ineffassign
@@ -22,6 +15,14 @@ linters:
     - reassign
     - rowserrcheck
     - sqlclosecheck
+    - staticcheck
     - tparallel
-    - typecheck
     - unconvert
+  settings:
+    staticcheck:
+      checks:
+          - S1*
+formatters:
+  enable:
+    - gofmt
+    - goimports
