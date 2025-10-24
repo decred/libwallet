@@ -9,15 +9,29 @@ import (
 	"time"
 )
 
+// SeedType defines the type of seed used by the wallet. Currently all use bip39
+// words but they are different lengths.
+type SeedType int
+
+const (
+	// STFifteenWords encodes a birthday along with the seed. It is also
+	// used by bison wallet and has a tweak that causes it to produce the
+	// same wallet.
+	STFifteenWords    SeedType = iota // 0
+	STTwelveWords                     // 1
+	STTwentyFourWords                 // 2
+)
+
 const walletDataFileName = "walletdata.json"
 
 type walletData struct {
-	EncryptedSeedHex   string `json:"encryptedseedhex,omitempty"`
-	DefaultAccountXPub string `json:"defaultaccountxpub,omitempty"`
-	Birthday           int64  `json:"birthday,omitempty"`
+	EncryptedSeedHex   string   `json:"encryptedseedhex,omitempty"`
+	SeedType           SeedType `json:"seedtype,omitempty"`
+	DefaultAccountXPub string   `json:"defaultaccountxpub,omitempty"`
+	Birthday           int64    `json:"birthday,omitempty"`
 }
 
-func SaveWalletData(seed []byte, defaultAccountXPub string, birthday time.Time, dataDir string, walletPass []byte) (*walletData, error) {
+func saveWalletData(seed []byte, defaultAccountXPub string, birthday time.Time, dataDir string, walletPass []byte, seedType SeedType) (*walletData, error) {
 	encSeed, err := EncryptData(seed, walletPass)
 	if err != nil {
 		return nil, fmt.Errorf("seed encryption error: %v", err)
@@ -28,6 +42,7 @@ func SaveWalletData(seed []byte, defaultAccountXPub string, birthday time.Time, 
 		EncryptedSeedHex:   encSeedHex,
 		DefaultAccountXPub: defaultAccountXPub,
 		Birthday:           birthday.Unix(),
+		SeedType:           seedType,
 	}
 	file, err := json.MarshalIndent(wd, "", " ")
 	if err != nil {
@@ -41,8 +56,8 @@ func SaveWalletData(seed []byte, defaultAccountXPub string, birthday time.Time, 
 	return wd, nil
 }
 
-// RetreiveWalletData returns the wallet data from the data dir.
-func RetreiveWalletData(dataDir string) (*walletData, error) {
+// retrieveWalletData returns the wallet data from the data dir.
+func retrieveWalletData(dataDir string) (*walletData, error) {
 	fp := filepath.Join(dataDir, walletDataFileName)
 	b, err := os.ReadFile(fp)
 	if err != nil {

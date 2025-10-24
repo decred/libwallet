@@ -48,11 +48,16 @@ func CreateWallet(ctx context.Context, params CreateWalletParams, recovery *Reco
 		return nil, fmt.Errorf("check new wallet data directory error: %w", err)
 	}
 
-	var seed []byte
-	var birthday time.Time
+	var (
+		seed        []byte
+		tweakedSeed func() []byte
+		birthday    time.Time
+		seedType    SeedType
+	)
+
 	if recovery != nil {
 		if recovery.UseLocalSeed {
-			wd, err := RetreiveWalletData(params.DataDir)
+			wd, err := retrieveWalletData(params.DataDir)
 			if err != nil {
 				return nil, fmt.Errorf("unable to get wallet data: %v", err)
 			}
@@ -65,8 +70,9 @@ func CreateWallet(ctx context.Context, params CreateWalletParams, recovery *Reco
 				return nil, fmt.Errorf("unable to decrypt wallet seed: %v", err)
 			}
 			birthday = time.Unix(wd.Birthday, 0)
+			seedType = wd.SeedType
 		} else {
-			seed, birthday = recovery.Seed, recovery.Birthday
+			seed, birthday, seedType = recovery.Seed, recovery.Birthday, recovery.SeedType
 		}
 	} else {
 		seed, err = hdkeychain.GenerateSeed(entropyBytes)
@@ -74,24 +80,29 @@ func CreateWallet(ctx context.Context, params CreateWalletParams, recovery *Reco
 			return nil, fmt.Errorf("unable to generate random seed: %v", err)
 		}
 		birthday = time.Now()
+		// Seed type is default fifteen words.
 	}
 
-	// Adjust seed to create the same wallet as dex.
-	b := make([]byte, len(seed)+4)
-	copy(b, seed)
-	binary.BigEndian.PutUint32(b[len(seed):], 42)
-	tweakedSeed := blake256.Sum256(b)
+	if seedType == STFifteenWords {
+		// Adjust seed to create the same wallet as dex.
+		b := make([]byte, len(seed)+4)
+		copy(b, seed)
+		binary.BigEndian.PutUint32(b[len(seed):], 42)
+		ts := blake256.Sum256(b)
+		tweakedSeed = func() []byte { return ts[:] }
+	} else {
+		tweakedSeed = func() []byte { return seed }
+	}
 
-	_, _, _, acctKeySLIP0044Priv, err := udb.HDKeysFromSeed(tweakedSeed[:], chainParams)
+	_, _, _, acctKeySLIP0044Priv, err := udb.HDKeysFromSeed(tweakedSeed(), chainParams)
 	if err != nil {
 		return nil, err
 	}
 	defer acctKeySLIP0044Priv.Zero()
 	xpub := acctKeySLIP0044Priv.Neuter()
-
-	wd, err := SaveWalletData(seed, xpub.String(), birthday, params.DataDir, params.Pass)
+	wd, err := saveWalletData(seed, xpub.String(), birthday, params.DataDir, params.Pass, seedType)
 	if err != nil {
-		return nil, fmt.Errorf("SaveWalletData error: %v", err)
+		return nil, fmt.Errorf("saveWalletData error: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
@@ -119,7 +130,7 @@ func CreateWallet(ctx context.Context, params CreateWalletParams, recovery *Reco
 	}()
 
 	// Initialize the newly created database for the wallet before opening.
-	err = wallet.Create(ctx, db, nil, params.Pass, tweakedSeed[:], chainParams)
+	err = wallet.Create(ctx, db, nil, params.Pass, tweakedSeed(), chainParams)
 	if err != nil {
 		return nil, fmt.Errorf("wallet.Create error: %w", err)
 	}
@@ -185,7 +196,7 @@ func CreateWatchOnlyWallet(ctx context.Context, extendedPubKey string, params Cr
 	}
 
 	if useLocalSeed {
-		wd, err := RetreiveWalletData(params.DataDir)
+		wd, err := retrieveWalletData(params.DataDir)
 		if err != nil {
 			return nil, fmt.Errorf("unable to get wallet data: %v", err)
 		}
@@ -197,9 +208,9 @@ func CreateWatchOnlyWallet(ctx context.Context, extendedPubKey string, params Cr
 		return nil, fmt.Errorf("unable to parse extended key: %w", err)
 	}
 
-	wd, err := SaveWalletData(nil, xpub.String(), time.Time{}, params.DataDir, nil) // password not required
+	wd, err := saveWalletData(nil, xpub.String(), time.Time{}, params.DataDir, nil, 0) // password not required
 	if err != nil {
-		return nil, fmt.Errorf("SaveWalletData error: %v", err)
+		return nil, fmt.Errorf("saveWalletData error: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
@@ -266,7 +277,7 @@ func LoadWallet(ctx context.Context, params OpenWalletParams) (*Wallet, error) {
 		return nil, fmt.Errorf("error parsing chain params: %w", err)
 	}
 
-	wd, err := RetreiveWalletData(params.DataDir)
+	wd, err := retrieveWalletData(params.DataDir)
 	if err != nil {
 		return nil, err
 	}

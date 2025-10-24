@@ -143,3 +143,46 @@ func TestDecodeTx(t *testing.T) {
 		})
 	}
 }
+
+func TestDecryptSeed(t *testing.T) {
+	metaData := new(walletData)
+	w := &Wallet{metaData: metaData}
+
+	tests := []struct {
+		name, seed, wantMnemonic string
+		pass                     []byte
+		birthday                 int64
+		seedType                 SeedType
+	}{{
+		name:         "ok 15",
+		seed:         "3bb9a36312986f1bcf50ba8be3e07d158be3222c9354d4c65cc6f57863c3589bdd2fccd9dbf06d082a1abafb1d63707964c1cb4c14e8843abdb1",
+		birthday:     1740614400,
+		pass:         []byte("pass"),
+		wantMnemonic: "peace option follow minute useful proud orphan zero truck response satisfy shell need chef silly",
+	}, {
+		name:         "ok 12",
+		seed:         "ce6561d42c8f54f47915b8261e83ecb6b97cf7ab11096ee1d4f2560740cb1646b2f0f6bd614caae03bdcef0241b1e7ee44caa36cbccefc10",
+		pass:         []byte("pass"),
+		seedType:     STTwelveWords,
+		wantMnemonic: "length you letter page olive equip proud solve goose spirit easily orchard",
+	}, {
+		name:         "ok 24",
+		seed:         "923713f26091c7587b31ebf695801bf1ab260ae98a7cdbc4d65c01167b088ca77f65996ca0d885d9cf73bded3b3ae84c396ec6c7170ff0a66b821cd3dc4cae9a4f8924dd5f39fd91",
+		pass:         []byte("pass"),
+		seedType:     STTwentyFourWords,
+		wantMnemonic: "flag thank useful eight cattle smile digital bar minute traffic kidney aunt heart capital glory salad alert brass neutral resource speak seat month follow",
+	}}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			metaData.Birthday, metaData.EncryptedSeedHex, metaData.SeedType = test.birthday, test.seed, test.seedType
+			mnemonic, err := w.DecryptSeed(test.pass)
+			if err != nil {
+				t.Fatalf("unexpected error %v", err)
+			}
+			if mnemonic != test.wantMnemonic {
+				t.Fatalf("expected mnemonic %v but got %v", test.wantMnemonic, mnemonic)
+			}
+		})
+	}
+}
