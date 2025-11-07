@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"decred.org/dcrwallet/v4/wallet/udb"
 	"github.com/decred/dcrd/crypto/blake256"
 	"github.com/decred/dcrd/hdkeychain/v3"
+	"github.com/decred/libwallet/mnemonic"
 )
 
 const (
@@ -49,10 +51,9 @@ func CreateWallet(ctx context.Context, params CreateWalletParams, recovery *Reco
 	}
 
 	var (
-		seed        []byte
-		tweakedSeed func() []byte
-		birthday    time.Time
-		seedType    SeedType
+		seed, seedPass, tweakedSeed []byte
+		birthday                    time.Time
+		seedType                    SeedType
 	)
 
 	if recovery != nil {
@@ -69,10 +70,20 @@ func CreateWallet(ctx context.Context, params CreateWalletParams, recovery *Reco
 			if err != nil {
 				return nil, fmt.Errorf("unable to decrypt wallet seed: %v", err)
 			}
+			if len(wd.EncryptedSeedPassHex) != 0 {
+				encSeedPass, err := hex.DecodeString(wd.EncryptedSeedPassHex)
+				if err != nil {
+					return nil, fmt.Errorf("unable to decode encrypted seed pass: %v", err)
+				}
+				seedPass, err = DecryptData(encSeedPass, params.Pass)
+				if err != nil {
+					return nil, fmt.Errorf("unable to decrypt wallet seed pass: %v", err)
+				}
+			}
 			birthday = time.Unix(wd.Birthday, 0)
 			seedType = wd.SeedType
 		} else {
-			seed, birthday, seedType = recovery.Seed, recovery.Birthday, recovery.SeedType
+			seed, seedPass, birthday, seedType = recovery.Seed, recovery.SeedPass, recovery.Birthday, recovery.SeedType
 		}
 	} else {
 		seed, err = hdkeychain.GenerateSeed(entropyBytes)
@@ -83,24 +94,36 @@ func CreateWallet(ctx context.Context, params CreateWalletParams, recovery *Reco
 		// Seed type is default fifteen words.
 	}
 
-	if seedType == STFifteenWords {
-		// Adjust seed to create the same wallet as dex.
+	switch seedType {
+	case STFifteenWords:
+		// Applying the seed pass to 15 word wallets breaks existing
+		// wallets when no pass is supplied. Also, the mnemonic cannot
+		// be used by other decred software if a passphrase is applied.
+		if len(seedPass) != 0 {
+			return nil, errors.New("seed passphrase cannot be used with 15 word mnemonics")
+		}
+		// Adjust seed to create the same wallet as bison wallet.
 		b := make([]byte, len(seed)+4)
 		copy(b, seed)
 		binary.BigEndian.PutUint32(b[len(seed):], 42)
 		ts := blake256.Sum256(b)
-		tweakedSeed = func() []byte { return ts[:] }
-	} else {
-		tweakedSeed = func() []byte { return seed }
+		tweakedSeed = ts[:]
+	case STTwelveWords, STTwentyFourWords:
+		words, err := mnemonic.GenerateMnemonic(seed)
+		if err != nil {
+			return nil, fmt.Errorf("unable to recreate seed mnemonic: %v", err)
+		}
+		// Apply even if password is null.
+		tweakedSeed = mnemonic.ApplyPassphrase(seed, seedPass, words)
 	}
 
-	_, _, _, acctKeySLIP0044Priv, err := udb.HDKeysFromSeed(tweakedSeed(), chainParams)
+	_, _, _, acctKeySLIP0044Priv, err := udb.HDKeysFromSeed(tweakedSeed, chainParams)
 	if err != nil {
 		return nil, err
 	}
 	defer acctKeySLIP0044Priv.Zero()
 	xpub := acctKeySLIP0044Priv.Neuter()
-	wd, err := saveWalletData(seed, xpub.String(), birthday, params.DataDir, params.Pass, seedType)
+	wd, err := saveWalletData(seed, seedPass, xpub.String(), birthday, params.DataDir, params.Pass, seedType)
 	if err != nil {
 		return nil, fmt.Errorf("saveWalletData error: %v", err)
 	}
@@ -130,7 +153,7 @@ func CreateWallet(ctx context.Context, params CreateWalletParams, recovery *Reco
 	}()
 
 	// Initialize the newly created database for the wallet before opening.
-	err = wallet.Create(ctx, db, nil, params.Pass, tweakedSeed(), chainParams)
+	err = wallet.Create(ctx, db, nil, params.Pass, tweakedSeed, chainParams)
 	if err != nil {
 		return nil, fmt.Errorf("wallet.Create error: %w", err)
 	}
@@ -208,7 +231,7 @@ func CreateWatchOnlyWallet(ctx context.Context, extendedPubKey string, params Cr
 		return nil, fmt.Errorf("unable to parse extended key: %w", err)
 	}
 
-	wd, err := saveWalletData(nil, xpub.String(), time.Time{}, params.DataDir, nil, 0) // password not required
+	wd, err := saveWalletData(nil, nil, xpub.String(), time.Time{}, params.DataDir, nil, 0) // password not required
 	if err != nil {
 		return nil, fmt.Errorf("saveWalletData error: %v", err)
 	}

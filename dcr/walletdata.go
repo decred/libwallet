@@ -25,24 +25,35 @@ const (
 const walletDataFileName = "walletdata.json"
 
 type walletData struct {
-	EncryptedSeedHex   string   `json:"encryptedseedhex,omitempty"`
-	SeedType           SeedType `json:"seedtype,omitempty"`
-	DefaultAccountXPub string   `json:"defaultaccountxpub,omitempty"`
-	Birthday           int64    `json:"birthday,omitempty"`
+	EncryptedSeedHex     string   `json:"encryptedseedhex,omitempty"`
+	EncryptedSeedPassHex string   `json:"encryptedseedpasshex,omitempty"`
+	SeedType             SeedType `json:"seedtype,omitempty"`
+	DefaultAccountXPub   string   `json:"defaultaccountxpub,omitempty"`
+	Birthday             int64    `json:"birthday,omitempty"`
 }
 
-func saveWalletData(seed []byte, defaultAccountXPub string, birthday time.Time, dataDir string, walletPass []byte, seedType SeedType) (*walletData, error) {
+func saveWalletData(seed, seedPass []byte, defaultAccountXPub string, birthday time.Time, dataDir string, walletPass []byte, seedType SeedType) (*walletData, error) {
 	encSeed, err := EncryptData(seed, walletPass)
 	if err != nil {
 		return nil, fmt.Errorf("seed encryption error: %v", err)
 	}
 
+	encSeedPassHex := ""
+	if len(seedPass) != 0 {
+		encSeedPass, err := EncryptData(seedPass, walletPass)
+		if err != nil {
+			return nil, fmt.Errorf("seed pass encryption error: %v", err)
+		}
+		encSeedPassHex = hex.EncodeToString(encSeedPass)
+	}
+
 	encSeedHex := hex.EncodeToString(encSeed)
 	wd := &walletData{
-		EncryptedSeedHex:   encSeedHex,
-		DefaultAccountXPub: defaultAccountXPub,
-		Birthday:           birthday.Unix(),
-		SeedType:           seedType,
+		EncryptedSeedHex:     encSeedHex,
+		EncryptedSeedPassHex: encSeedPassHex,
+		DefaultAccountXPub:   defaultAccountXPub,
+		Birthday:             birthday.Unix(),
+		SeedType:             seedType,
 	}
 	file, err := json.MarshalIndent(wd, "", " ")
 	if err != nil {

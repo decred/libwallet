@@ -87,15 +87,28 @@ func (w *Wallet) ReEncryptSeed(oldPass, newPass []byte) error {
 		return err
 	}
 
+	var seedPass []byte
+	if len(w.metaData.EncryptedSeedPassHex) != 0 {
+		encSeedPass, err := hex.DecodeString(w.metaData.EncryptedSeedPassHex)
+		if err != nil {
+			return fmt.Errorf("unable to decode encrypted seed pass: %v", err)
+		}
+		seedPass, err = DecryptData(encSeedPass, oldPass)
+		if err != nil {
+			return fmt.Errorf("unable to decrypt wallet seed pass: %v", err)
+		}
+	}
+
 	birthday := time.Unix(w.metaData.Birthday, 0)
-	updatedMetaData, err := saveWalletData(seed, w.metaData.DefaultAccountXPub, birthday, w.dir, newPass, w.metaData.SeedType)
+	updatedMetaData, err := saveWalletData(seed, seedPass, w.metaData.DefaultAccountXPub, birthday, w.dir, newPass, w.metaData.SeedType)
 	if err != nil {
 		return err
 	}
 
-	// Update only the EncryptedSeedHex field since we've held the seedMtx lock
+	// Update only the EncryptedSeedHex and pass field since we've held the seedMtx lock
 	// above.
 	w.metaData.EncryptedSeedHex = updatedMetaData.EncryptedSeedHex
+	w.metaData.EncryptedSeedPassHex = updatedMetaData.EncryptedSeedPassHex
 	return nil
 }
 

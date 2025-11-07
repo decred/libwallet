@@ -89,6 +89,7 @@ func createWallet(cConfig *C.char) *C.char {
 		}
 		recoveryConfig = &dcr.RecoveryCfg{
 			Seed:     seed,
+			SeedPass: []byte(cfg.SeedPass),
 			SeedType: seedType,
 			Birthday: birthday,
 		}

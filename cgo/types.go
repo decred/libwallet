@@ -166,6 +166,7 @@ type Config struct {
 	Birthday int64  `json:"birthday"`
 	Pass     string `json:"pass"`
 	Mnemonic string `json:"mnemonic"`
+	SeedPass string `json:"seedpass"`
 	// If the wallet existed before but the db was deleted to reduce
 	// storage, restore from the local encrypted seed using the provided
 	// password. Also works for watching only wallets with no password.
