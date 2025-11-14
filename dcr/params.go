@@ -24,6 +24,7 @@ type CreateWalletParams struct {
 // RecoveryCfg is the information used to recover a wallet.
 type RecoveryCfg struct {
 	Seed                 []byte
+	SeedPass             []byte
 	SeedType             SeedType
 	Birthday             time.Time
 	UseLocalSeed         bool

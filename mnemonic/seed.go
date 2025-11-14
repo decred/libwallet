@@ -2,11 +2,15 @@ package mnemonic
 
 import (
 	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"sort"
 	"strings"
+
+	"golang.org/x/crypto/pbkdf2"
+	"golang.org/x/text/unicode/norm"
 )
 
 // DecodeMnemonic decodes the entropy and checksum from mnemonic and validates
@@ -131,4 +135,16 @@ func wordIndex(word string) (uint16, error) {
 		return 0, fmt.Errorf("word %q not known. closest match lexicographically is %q", word, wordList[i])
 	}
 	return uint16(i), nil
+}
+
+// ApplyPassphrase returns the seed after applying passphrase. Follows
+// https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki#from-mnemonic-to-seed
+func ApplyPassphrase(seed, pass []byte, words string) []byte {
+	const (
+		iterations = 2048
+		keyLen     = 64
+	)
+	password := norm.NFC.String(words)
+	salt := "mnemonic" + norm.NFC.String(string(pass))
+	return pbkdf2.Key([]byte(password), []byte(salt), iterations, keyLen, sha512.New)
 }
