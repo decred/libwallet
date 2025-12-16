@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	wallettypes "decred.org/dcrwallet/v4/rpc/jsonrpc/types"
+	wallettypes "decred.org/dcrwallet/v5/rpc/jsonrpc/types"
 )
 
 const (

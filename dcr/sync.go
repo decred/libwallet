@@ -5,10 +5,10 @@ import (
 	"net"
 	"time"
 
-	"decred.org/dcrwallet/v4/p2p"
-	"decred.org/dcrwallet/v4/spv"
-	dcrwallet "decred.org/dcrwallet/v4/wallet"
-	"github.com/decred/dcrd/addrmgr/v2"
+	"decred.org/dcrwallet/v5/p2p"
+	"decred.org/dcrwallet/v5/spv"
+	dcrwallet "decred.org/dcrwallet/v5/wallet"
+	"github.com/decred/dcrd/addrmgr/v3"
 )
 
 // StartSync connects the wallet to the blockchain network via SPV and returns
@@ -25,7 +25,7 @@ func (w *Wallet) StartSync(ctx context.Context, ntfns *spv.Notifications, connec
 	w.log.Info("Starting sync...")
 
 	addr := &net.TCPAddr{IP: net.ParseIP("::1"), Port: 0}
-	amgr := addrmgr.New(w.dir, net.LookupIP)
+	amgr := addrmgr.New(w.dir)
 	lp := p2p.NewLocalPeer(w.ChainParams(), addr, amgr)
 
 	// We must create a new syncer for every attempt or we will get a
