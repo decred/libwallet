@@ -31,7 +31,29 @@ const (
 	// sstxCommitmentString is the string to insert when a verbose
 	// transaction output's pkscript type is a ticket commitment.
 	sstxCommitmentString = "sstxcommitment"
+	// defaultRelayFeePerByte is the default relay fee in atoms per byte.
+	defaultRelayFeePerByte = defaultRelayFeePerKb / 1000
 )
+
+// isDust returns whether the given output value is considered dust at the
+// default relay fee rate. See dcrd/internal/mempool/policy.go for the dust
+// policy documentation. An output is dust when:
+//
+//	value / (3 * (outputSize + 165)) < relayFeePerByte
+func isDust(txOut *wire.TxOut) bool {
+	if txscript.IsUnspendable(txOut.Value, txOut.PkScript) {
+		return true
+	}
+	totalSize := uint64(txOut.SerializeSize()) + 165
+	return uint64(txOut.Value)/(3*totalSize) < defaultRelayFeePerByte
+}
+
+// dustThreshold returns the minimum non-dust value in atoms for the given
+// output size.
+func dustThreshold(txOutSize int) int64 {
+	totalSize := uint64(txOutSize) + 165
+	return int64(defaultRelayFeePerByte * totalSize * 3)
+}
 
 // newTxOut returns a new transaction output with the given parameters.
 func newTxOut(amount int64, pkScriptVer uint16, pkScript []byte) *wire.TxOut {
@@ -217,6 +239,12 @@ func (w *Wallet) CreateTransaction(ctx context.Context, outputs []*Output,
 		}
 		payScriptVer, payScript := addr.PaymentScript()
 		txOut := newTxOut(int64(out.Amount), payScriptVer, payScript)
+		if !sendAll && isDust(txOut) {
+			minVal := dustThreshold(txOut.SerializeSize())
+			return nil, nil, 0, fmt.Errorf("output %d is dust: payment of %d atoms "+
+				"is below the dust threshold of %d atoms for address %s",
+				i, out.Amount, minVal, out.Address)
+		}
 		outs[i] = txOut
 	}
 
@@ -286,6 +314,13 @@ func (w *Wallet) SendRawTransaction(ctx context.Context, txHex string) (*chainha
 	w.syncerMtx.RLock()
 	defer w.syncerMtx.RUnlock()
 	return w.mainWallet.PublishTransaction(ctx, msgTx, w.syncer)
+}
+
+// AbandonTransaction removes an unmined transaction, identified by its hash,
+// from the wallet. All transaction spend chains deriving from the transaction's
+// outputs are also removed.
+func (w *Wallet) AbandonTransaction(ctx context.Context, txHash *chainhash.Hash) error {
+	return w.mainWallet.AbandonTransaction(ctx, txHash)
 }
 
 // createVinList returns a slice of JSON objects for the inputs of the passed
