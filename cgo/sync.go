@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"decred.org/dcrwallet/v4/spv"
-	dcrwallet "decred.org/dcrwallet/v4/wallet"
+	"decred.org/dcrwallet/v5/spv"
+	dcrwallet "decred.org/dcrwallet/v5/wallet"
 )
 
 //export syncWallet

@@ -10,8 +10,8 @@ import (
 	"time"
 
 	dexmnemonic "decred.org/dcrdex/client/mnemonic"
-	"decred.org/dcrwallet/v4/spv"
-	"decred.org/dcrwallet/v4/wallet"
+	"decred.org/dcrwallet/v5/spv"
+	"decred.org/dcrwallet/v5/wallet"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/libwallet/mnemonic"
 	"github.com/decred/slog"

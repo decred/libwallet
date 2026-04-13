@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	walleterrors "decred.org/dcrwallet/v4/errors"
-	wallettypes "decred.org/dcrwallet/v4/rpc/jsonrpc/types"
-	"decred.org/dcrwallet/v4/wallet"
+	walleterrors "decred.org/dcrwallet/v5/errors"
+	wallettypes "decred.org/dcrwallet/v5/rpc/jsonrpc/types"
+	"decred.org/dcrwallet/v5/wallet"
 	"github.com/decred/base58"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/crypto/blake256"

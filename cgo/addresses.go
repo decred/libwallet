@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"strconv"
 
-	dcrwallet "decred.org/dcrwallet/v4/wallet"
-	"decred.org/dcrwallet/v4/wallet/udb"
+	dcrwallet "decred.org/dcrwallet/v5/wallet"
+	"decred.org/dcrwallet/v5/wallet/udb"
 	"github.com/decred/dcrd/txscript/v4/stdaddr"
 	"github.com/decred/libwallet/dcr"
 )

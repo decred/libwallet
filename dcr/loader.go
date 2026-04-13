@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"decred.org/dcrwallet/v4/wallet"
-	_ "decred.org/dcrwallet/v4/wallet/drivers/bdb"
-	"decred.org/dcrwallet/v4/wallet/udb"
+	"decred.org/dcrwallet/v5/wallet"
+	_ "decred.org/dcrwallet/v5/wallet/drivers/bdb"
+	"decred.org/dcrwallet/v5/wallet/udb"
 	"github.com/decred/dcrd/crypto/blake256"
 	"github.com/decred/dcrd/hdkeychain/v3"
 	"github.com/decred/libwallet/mnemonic"
