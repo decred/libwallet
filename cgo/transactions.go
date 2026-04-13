@@ -91,6 +91,22 @@ func sendRawTransaction(cName, cTxHex *C.char) *C.char {
 	return successCResponse("%s", txHash)
 }
 
+//export abandonTransaction
+func abandonTransaction(cName, cTxID *C.char) *C.char {
+	w, exists := loadedWallet(cName)
+	if !exists {
+		return errCResponse("wallet with name %q does not exist", goString(cName))
+	}
+	txHash, err := chainhash.NewHashFromStr(goString(cTxID))
+	if err != nil {
+		return errCResponse("invalid tx hash: %v", err)
+	}
+	if err := w.AbandonTransaction(w.ctx, txHash); err != nil {
+		return errCResponse("unable to abandon transaction: %v", err)
+	}
+	return successCResponse("%s", txHash)
+}
+
 //export listUnspents
 func listUnspents(cName *C.char) *C.char {
 	w, exists := loadedWallet(cName)

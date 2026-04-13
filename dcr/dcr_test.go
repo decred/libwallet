@@ -6,6 +6,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/decred/dcrd/chaincfg/v3"
 	"github.com/decred/dcrd/hdkeychain/v3"
+	"github.com/decred/dcrd/wire"
 )
 
 func TestAddrFromExtendedKey(t *testing.T) {
@@ -141,6 +142,70 @@ func TestDecodeTx(t *testing.T) {
 			}
 			spew.Dump(tx)
 		})
+	}
+}
+
+func TestIsDust(t *testing.T) {
+	// Standard P2PKH script (25 bytes). Output serialize size is 36.
+	// Dust threshold = 10 * (36 + 165) * 3 = 6030 atoms.
+	p2pkhScript := []byte{
+		0x76, 0xa9, 0x14, // OP_DUP OP_HASH160 OP_DATA_20
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, // 20-byte pubkey hash
+		0x88, 0xac, // OP_EQUALVERIFY OP_CHECKSIG
+	}
+	opReturnScript := []byte{0x6a, 0x04, 0x01, 0x02, 0x03, 0x04}
+
+	tests := []struct {
+		name   string
+		value  int64
+		script []byte
+		want   bool
+	}{{
+		name:   "zero value is dust",
+		value:  0,
+		script: p2pkhScript,
+		want:   true,
+	}, {
+		name:   "below threshold is dust",
+		value:  6029,
+		script: p2pkhScript,
+		want:   true,
+	}, {
+		name:   "at threshold is not dust",
+		value:  6030,
+		script: p2pkhScript,
+		want:   false,
+	}, {
+		name:   "above threshold is not dust",
+		value:  6031,
+		script: p2pkhScript,
+		want:   false,
+	}, {
+		name:   "OP_RETURN is always dust",
+		value:  100000,
+		script: opReturnScript,
+		want:   true,
+	}}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			txOut := &wire.TxOut{Value: test.value, PkScript: test.script}
+			if got := isDust(txOut); got != test.want {
+				t.Fatalf("isDust(%d) = %v, want %v", test.value, got, test.want)
+			}
+		})
+	}
+}
+
+func TestDustThreshold(t *testing.T) {
+	// For a P2PKH output (serialize size 36):
+	// threshold = 10 * (36 + 165) * 3 = 6030
+	const p2pkhSerSize = 36
+	got := dustThreshold(p2pkhSerSize)
+	if got != 6030 {
+		t.Fatalf("dustThreshold(%d) = %d, want 6030", p2pkhSerSize, got)
 	}
 }
 
